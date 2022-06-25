@@ -1,0 +1,12 @@
+"\sum_{n=1}^N{a+b}" ->
+"\sum_n^N{a+b}" ->
+"\sum^N{a+b}" ->
+"\sum_{n=1}{a+b}+e+f" -> "{}"
+
+"a_i+b" -> "{a_i}{+b}"
+"a+b_i" -> "{a+}{b_i}"
+"a_{i-n}+b" -> "{a_{i-n}}{+b}"
+
+"\color{red}{a+b}" -> "a+b" but colored
+"\color{255,255,0}{a+b}" -> "a+b" but colored
+"\color{255,255,0,125}{a+b}" -> "a+b" but colored
