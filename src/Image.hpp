@@ -77,21 +77,28 @@ class Image {
 		/* 
 			@brief Read image from file 
 			@param filename path to file
+			@return true if file read successfully, false if not
 		*/
 		bool read(const char* filename, int channel_force = 0);
 		
 		/* 
 			@brief Write image to file 
 			@param filename path to file
+			@return true if image written successfully, false if not
 		*/
 		bool write(const char* filename);
 
 		/* 
 			@brief Get file type 
 			@param filename path to file
+			@return file type
 		*/
 		ImageType get_file_type(const char* filename);
 
+		/*
+			@brief Get image details
+			@return image details (width, height, channels, size, etc.)
+		*/
 		Details getDetails() const;
 	
 		/**/
