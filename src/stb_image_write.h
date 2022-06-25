@@ -760,6 +760,7 @@ static void *stbiw__sbgrowf(void **arr, int increment, int itemsize)
       *arr = (void *) ((int *) p + 2);
       stbiw__sbm(*arr) = m;
    }
+   STBIW_FREE(p);
    return *arr;
 }
 
