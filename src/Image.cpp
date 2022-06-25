@@ -52,7 +52,7 @@ bool Image::write(const char *filename)
 {
 	int success;
 
-	ImageType type = get_file_type(filename);
+	ImageType type = getFileType(filename);
 
 	switch (type)
 	{
@@ -82,7 +82,7 @@ bool Image::write(const char *filename)
 	}
 }
 
-ImageType Image::get_file_type(const char *filename)
+ImageType Image::getFileType(const char *filename)
 {
 	const char *ext = strrchr(filename, '.');
 	if (ext != nullptr)
