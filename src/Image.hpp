@@ -1,5 +1,7 @@
 #pragma once
 
+#include "schrift.h"
+
 #include <stdint.h>
 #include <cstdio>
 #include <complex>
@@ -7,10 +9,6 @@
 #include <cmath>
 #include <optional>
 #include <functional>
-
-#include "schrift.h"
-
-#define STEG_HEADER_SIZE sizeof(uint32_t) * 8
 
 enum ImageType
 {
@@ -93,7 +91,7 @@ class Image {
 			@param filename path to file
 			@return file type
 		*/
-		ImageType get_file_type(const char* filename);
+		ImageType getFileType(const char* filename);
 
 		/*
 			@brief Get image details
