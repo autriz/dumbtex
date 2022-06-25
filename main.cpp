@@ -2,27 +2,24 @@
 
 #include <locale>
 #include <codecvt>
-#include <iostream>
-
 #include <chrono>
-#include <string>
 
 class Timer
 {
     
     public:
-        Timer()
-        {
-            m_StartTimepoint = std::chrono::high_resolution_clock::now();
-        }
+        Timer() : m_StartTimepoint(std::chrono::high_resolution_clock::now()) { };
+        
         Timer(const char* timer_name) : Timer()
         {
-            name = timer_name;
+            m_name = timer_name;
         }
+
         ~Timer()
         {
             stop();
         }
+
         void stop()
         {
             auto endTimepoint = std::chrono::high_resolution_clock::now();
@@ -33,15 +30,17 @@ class Timer
             auto duration = end - start;
             double ms = duration * .001;
 
-            if (name.length() > 0)
-                printf_s("[%s] execution time: %ld us (%lf ms)\n", duration, ms);
+            if (m_name.length() > 0)
+                printf_s("[%s] execution time: %ld us (%lf ms)\n", m_name, duration, ms);
             else
                 printf_s("Execution time: %ld us (%lf ms)\n", duration, ms);
         }
 
     private:
+        Timer(const Timer& other);
+
         std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimepoint;
-        std::string name;
+        std::string m_name;
 };
 
 int main(int argc, char* argv[]) {
