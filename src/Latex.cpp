@@ -61,7 +61,7 @@ void Latex::toImage( const std::string& expression,  const std::string& filepath
 
 void Latex::prepExpression(const std::string& expression)
 {
-    if (expression.length() <= 0)
+    if (expression.length() == 0)
         goto end_of_job;
 
     while (1)
