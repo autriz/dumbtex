@@ -212,6 +212,8 @@ void Image::flipY()
 void Image::overlay(const Image &source, int x, int y)
 {
 
+	printf("y: %d\n", y);
+
 	uint8_t *srcPx;
 	uint8_t *dstPx;
 
@@ -486,17 +488,24 @@ Image Image::concat(const Image& left, const Image& right)
 	int new_channels = left.channels > right.channels ? left.channels : right.channels;
 	int new_adv_h = left.advance_height > right.advance_height ? left.advance_height : right.advance_height;
 
-	if ((new_h - new_adv_h) < (right.height - right.advance_height)) new_h += (right.height - (new_h - new_adv_h));
+	if (1)
+		printf("new_h - new_adv_h = %d\nright.height - right.advance_height = %d\n", new_h-new_adv_h, right.height - right.advance_height);
 
-	// printf("left baseline: %d, right baseline: %d\n", left.baseline, right.baseline);
-	// printf("left height: %d, right height: %d, left adv height: %d, right adv height: %d\n", left.height, right.height, left.advance_height, right.advance_height);
-	// printf("new_h: %d, new_w: %d\n", new_h, new_w);
+	if ((new_h - new_adv_h) < (right.height - (right.advance_height < 0 ? 0 : right.advance_height))) new_h += (right.height - (new_h - new_adv_h));
+
+	if (1)
+	{
+		printf("left baseline: %d, right baseline: %d\n", left.baseline, right.baseline);
+		printf("left height: %d, right height: %d, left adv height: %d, right adv height: %d\n", left.height, right.height, left.advance_height, right.advance_height);
+		printf("new_h: %d, new_w: %d, new_adv_h: %d\n", new_h, new_w, new_adv_h);		
+	}
 
 	Image newImage(new_w, new_h, new_channels);
 	newImage.advance_height = new_adv_h;
 	newImage.baseline = left.baseline > right.baseline ? left.baseline : right.baseline;
 
-	// printf("newImage height: %d, newImage width: %d, newImage adv height: %d\n\n", newImage.height, newImage.width, newImage.advance_height);
+	if (1)
+		printf("newImage height: %d, newImage width: %d, newImage adv height: %d\n\n", newImage.height, newImage.width, newImage.advance_height);
 
 	newImage.overlay(left, 0, newImage.baseline > 0 ? newImage.baseline - left.baseline : 0); 
 	newImage.overlay(right, left.width, newImage.baseline > 0 ? newImage.baseline - right.baseline : 0); 
