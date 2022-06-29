@@ -63,9 +63,18 @@ class Image {
 
 		/* Blank constructor */
 		Image();
-		/* Gets image from file */
+		/* 
+			@brief Gets image from file 
+			@param filename File path
+			@param channel_force Forced number of color channels (default - 0, that is image's color channels will be applied)
+		*/
 		Image(const char* filename, int channel_force = 0);
-		/* Creates image */
+		/* 
+			@brief Image creation constructor
+			@param w Image width
+			@param h Image height
+			@param channels Color channels (default - 3, that is RGB) 
+		*/
 		Image(int w, int h, int channels = 3);
 		/* Copy constructor */
 		Image(const Image& other);
