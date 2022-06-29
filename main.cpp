@@ -51,22 +51,32 @@ int main(int argc, char* argv[]) {
     Timer timer;
 
     Latex latex;
+    try
+    {
+        latex.setFonts("./fonts/OpenSans-Regular.ttf", "", "");
 
-    latex.setFonts("./fonts/OpenSans-Regular.ttf", "", "");
+        std::string equation = argv[1];
+        std::string filepath = argv[2];
 
-    std::string equation = argv[1];
-    std::string filepath = argv[2];
-
-    for (int i = 0; i < equation.length(); i++) {
-        std::cout << argv[1][i] << " - " << (int)equation[i] << "\n";
+        if (filepath.length() > 0)
+            if (filepath.find(".png") != std::string::npos)
+                latex.toPng(equation, filepath);
+            else if (filepath.find(".jpg") != std::string::npos)
+                latex.toJpg(equation, filepath);
+            else if (filepath.find(".jpeg") != std::string::npos)
+                latex.toJpg(equation, filepath);
     }
-
-    if (filepath.length() > 0)
-        if (filepath.find(".png") != std::string::npos)
-            latex.toPng(equation, filepath);
-        else if (filepath.find(".jpg") != std::string::npos)
-            latex.toJpg(equation, filepath);
-        else if (filepath.find(".jpeg") != std::string::npos)
-            latex.toJpg(equation, filepath);
+    catch(const Latex::ConversionException& err)
+    {
+        std::cerr << "Conversion Exception Error: \n" << err.what() << "\n";
+    }
+    catch(const Latex::FileException& err)
+    {
+        std::cerr << "File Exception Error: \n" << err.what() << "\n";
+    }
+    catch(const Latex::ParseException& err)
+    {
+        std::cerr << "Parse Exception Error: \n" << err.what() << "\n";
+    }
 
 };
