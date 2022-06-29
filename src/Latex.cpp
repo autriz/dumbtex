@@ -43,7 +43,7 @@ void Latex::toImage( const std::string& expression,  const std::string& filepath
 
     //TODO: end
 
-    image.rasterizeText(expression, font, 255, 255, 0, 255);
+    image.rasterizeText(expression, font, p_colors);
 
     // std::cout << "Start\n";
     // image.rasterizeText(expression, font, 255, 255, 0, 255);
@@ -55,25 +55,54 @@ void Latex::toImage( const std::string& expression,  const std::string& filepath
     // printf("result:\nwidth: %ld, height: %ld, channels: %ld, size: %ld\n", result.width, result.height, result.channels, result.size);
 
     // result.write(filepath.c_str());
-
     image.write(filepath.c_str());
+
 };
 
 void Latex::prepExpression(const std::string& expression)
 {
+    size_t subfunc_index;
+
     if (expression.length() == 0)
         goto end_of_job;
 
-    while (1)
+    for (size_t i = 0; i < expression.length(); i++)
     {
-        goto end_of_job;
+        if (expression[i] == '\\')
+        {
+            std::cout << "found subexpression/function" << "\n";
+            // for (size_t u = 0; subfunctions[u].expression != NULL; u++)
+            //     if ((pos = expression.find(subfunctions[u].expression, i)) != std::string::npos)
+            //     {
+            //         std::cout << "u: " << u << ", i: " << i << "\n";
+            //         std::cout << "found \"" << subfunctions[u].expression << "\" at " << pos << "\n";
+            //         break;
+            //     };
+            if ((subfunc_index = getSubfunction(expression, i)) != -1)
+            {
+                std::cout << "i: " << i << "\n";
+                std::cout << "found \"" << subfunctions[subfunc_index].expression << "\" at " << i << "\n";
+            }
+        }
+        // std::cout << expression[i] << "\n";
     }
-
-    std::cout << expression << "\n";
+    goto end_of_job;
 
     end_of_job:
         return;
-}
+};
+
+size_t Latex::getSubfunction(const std::string& expression, int at)
+{
+    size_t index;
+
+    for (size_t i = 0; subfunctions[i].expression != NULL; i++)
+        if ((index = expression.find(subfunctions[i].expression, at)) != std::string::npos)
+        {
+            return i;
+        }
+    return -1;
+}; 
 
 void Latex::toPng( const std::string& expression,  const std::string& filepath) 
 { 

@@ -26,8 +26,6 @@ class Latex {
         */
         enum class WarningBehavior { Strict, Ignore, Log };
 
-        class Logger;
-
         /*
             @brief An exception thrown by the LaTeX parsing mechanism. 
         */
@@ -129,10 +127,32 @@ class Latex {
 
         /*
             @brief WIP. Preprocesses math expression
-            @returns Vector of strings
+            @returns Void
         */
         void prepExpression(const std::string& expression);
 
+        /*
+            @brief Searches and gets index of subfunction from the list
+            @param expression Expression string
+            @param at An index of starting point (always starts from backslash)
+            @returns A positive integer, representing index, or negative (-1), if subfunction was not found
+        */
+        size_t getSubfunction(const std::string& expression, int at);
+
         void operator=(const Latex& other);
 
+};
+
+/* Name is subject to change */
+struct Subfunction
+{
+    const char* expression;
+};
+
+static const Subfunction subfunctions[] = {
+    {"\\color"},
+    {"\\frac"},
+    {"\\sum"},
+    {"\\prod"},
+    {NULL}
 };
