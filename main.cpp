@@ -1,82 +1,62 @@
-#include "src/latex.hpp"
+#include "src/Latex.hpp"
 
-#include <locale>
-#include <codecvt>
-#include <chrono>
-
-class Timer
-{
-    
-    public:
-        Timer() : m_StartTimepoint(std::chrono::high_resolution_clock::now()) { };
-        
-        Timer(const char* timer_name) : Timer()
-        {
-            m_name = timer_name;
-        }
-
-        ~Timer()
-        {
-            stop();
-        }
-
-        void stop()
-        {
-            auto endTimepoint = std::chrono::high_resolution_clock::now();
-
-            auto start = std::chrono::time_point_cast<std::chrono::microseconds>(m_StartTimepoint).time_since_epoch().count();
-            auto end = std::chrono::time_point_cast<std::chrono::microseconds>(endTimepoint).time_since_epoch().count();
-
-            auto duration = end - start;
-            double ms = duration * .001;
-
-            if (m_name.length() > 0)
-                printf_s("[%s] execution time: %ld us (%lf ms)\n", m_name, duration, ms);
-            else
-                printf_s("Execution time: %ld us (%lf ms)\n", duration, ms);
-        }
-
-    private:
-        Timer(const Timer& other);
-
-        std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimepoint;
-        std::string m_name;
-};
-
+//Allows compilation from c++11, haven't checked runtime part
 int main(int argc, char* argv[]) {
-    // #ifdef _WIN32
-    //     system("chcp 65001");
-    // #endif
-
-    Timer timer;
+    
+    #if defined(DEBUG) || defined(PROFILER)
+        Instrumentor::Get().BeginSession("Profile");
+        {
+    #endif
+    
+    PROFILE_FUNCTION();
 
     Latex latex;
     try
     {
+        //create runtime font setter
         latex.setFonts("./fonts/OpenSans-Regular.ttf", "", "");
 
         std::string equation = argv[1];
         std::string filepath = argv[2];
 
-        if (filepath.length() > 0)
-            if (filepath.find(".png") != std::string::npos)
-                latex.toPng(equation, filepath);
-            else if (filepath.find(".jpg") != std::string::npos)
-                latex.toJpg(equation, filepath);
-            else if (filepath.find(".jpeg") != std::string::npos)
-                latex.toJpg(equation, filepath);
+        if (argc >= 2)
+            switch(Image::getFileType(filepath.c_str()))
+            {
+                case ImageType::PNG:
+                    latex.toPNG(equation, filepath);
+                    break;
+                case ImageType::JPG:
+                    latex.toJPG(equation, filepath);
+                    break;
+                case ImageType::BMP:
+                    latex.toBMP(equation, filepath);
+                    break;
+                case ImageType::TGA:
+                    latex.toTGA(equation, filepath);
+                    break;   
+                case ImageType::NO_TYPE:
+                    throw Latex::FileException("No file type", __FILE__, __LINE__); 
+                case ImageType::UNKNOWN:
+                    throw Latex::FileException("Unknown file type", __FILE__, __LINE__);
+            }
+    
     }
     catch(const Latex::ConversionException& err)
     {
-        std::cerr << "Conversion Exception Error: \n" << err.what() << "\n";
+        std::cerr << "Conversion Exception Error: " << err.what() << "\n";
     }
     catch(const Latex::FileException& err)
     {
-        std::cerr << "File Exception Error: \n" << err.what() << "\n";
+        std::cerr << "File Exception Error: " << err.what() << "\n";
     }
     catch(const Latex::ParseException& err)
     {
-        std::cerr << "Parse Exception Error: \n" << err.what() << "\n";
+        std::cerr << "Parse Exception Error: " << err.what() << "\n";
     }
 
+    #if defined(DEBUG) || defined(PROFILER)
+        }
+        Instrumentor::Get().EndSession();
+    #endif
+    
 };
