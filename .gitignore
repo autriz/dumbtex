@@ -2,8 +2,7 @@
 .vscode/
 build/
 CppProperties.json
-result.jpg
-result.png
-result1.png
+src/unit-test.txt
+results.json
 TODO
 *.exe
