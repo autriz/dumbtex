@@ -20,13 +20,35 @@ $(TARGET): $(OBJECTS)
 	@$(CC) $(CFLAGS) -o $@ $^ main.cpp
 
 
-PHONY: clean prod
+PHONY: clean prod debug profiler
 clean:
 	@printf "\e[31m\e[1mCleaning...\e[0m\n"
 	@echo "  /$(BUILDDIR)"
 	@echo "  /$(TARGET)"
 	@$(RM) -r $(BUILDDIR) $(OBJECTS)
 	@$(RM) "./$(TARGET)"
+
+debug:
+	@mkdir -p $(BUILDDIR)
+	@for source in $(basename $(notdir $(SOURCES))); do\
+		printf "\e[33m\e[1mBuilding...\e[0m\n";\
+		echo "  $$source.o from $$source.$(SRCEXT)";\
+		$(CC) $(CFLAGS) -D DEBUG -c -o $(BUILDDIR)/$$source.o $(SRCDIR)/$$source.$(SRCEXT);\
+	done
+	@printf "\e[95m\e[1mLinking...\e[0m\n";
+	@echo "  $(notdir $(OBJECTS))";
+	@$(CC) $(CFLAGS) -D DEBUG -o $(TARGET) $(OBJECTS) main.cpp;
+
+profiler:
+	@mkdir -p $(BUILDDIR)
+	@for source in $(basename $(notdir $(SOURCES))); do\
+		printf "\e[33m\e[1mBuilding...\e[0m\n";\
+		echo "  $$source.o from $$source.$(SRCEXT)";\
+		$(CC) $(CPRODFLAGS) -D PROFILER -c -o $(BUILDDIR)/$$source.o $(SRCDIR)/$$source.$(SRCEXT);\
+	done
+	@printf "\e[95m\e[1mLinking...\e[0m\n";
+	@echo "  $(notdir $(OBJECTS))";
+	@$(CC) $(CPRODFLAGS) -D PROFILER -o $(TARGET) $(OBJECTS) main.cpp;
 
 prod:
 	@mkdir -p $(BUILDDIR)
