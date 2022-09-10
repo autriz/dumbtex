@@ -6,11 +6,48 @@
 
 #include "Image.hpp"
 
+Font::Font(const char* fontFile, uint16_t size) {
+	PROFILE_SCOPE("Font::Font");
+
+	if(!setFont(fontFile)) {
+		printf("\e[31m[ERROR] Failed to load %s\e[0m\n", fontFile);
+		return;
+	}
+	setSize(size);
+}
+
+Font::~Font()
+{
+	sft_freefont(m_SFT.font);
+}
+
+bool Font::setFont(const char* fontFile)
+{
+	if (m_SFT.font != NULL)
+	{
+		sft_freefont(m_SFT.font);
+		m_SFT.font = NULL;
+	}
+
+	if((m_SFT.font = sft_loadfile(fontFile)) == NULL) {
+		m_FontFile = "";
+		return false;
+	}
+	m_FontFile = fontFile;
+	return true;
+}
+
+void Font::setSize(uint16_t size) 
+{
+	m_SFT.xScale = size;
+	m_SFT.yScale = size;
+}
+
 Image::Image(): m_Width(0), m_Height(0), m_Channels(0), m_Size(0), m_Baseline(m_Height), m_AdvanceHeight(0), m_Data(NULL) {};
 
 Image::Image(const char *filename, int channel_force)
 {
-	PROFILE_SCOPE("Image::Image");
+	PROFILE_SCOPE("Image::Image read");
 
 	if (read(filename, channel_force))
 	{
@@ -23,6 +60,8 @@ Image::Image(const char *filename, int channel_force)
 
 Image::Image(int w, int h, int channels) : m_Width(w), m_Height(h), m_Channels(channels), m_Baseline(h)
 {
+	PROFILE_SCOPE("Image::Image");
+
 	this->m_Size = this->m_Width * this->m_Height * this->m_Channels;
 	this->m_AdvanceHeight = 0;
 	this->m_Data = new uint8_t[this->m_Size];
@@ -32,6 +71,9 @@ Image::Image(int w, int h, int channels) : m_Width(w), m_Height(h), m_Channels(c
 
 Image::Image(const Image &other) : Image(other.m_Width, other.m_Height, other.m_Channels)
 {
+	PROFILE_SCOPE("Image::Image copy");
+
+	this->m_Baseline = other.m_Baseline;
 	this->m_AdvanceHeight = other.m_AdvanceHeight;
 	memcpy(m_Data, other.m_Data, m_Size);
 }
@@ -76,16 +118,14 @@ bool Image::write(const char *filename, ImageType type)
 			break;
 	}
 
-	if (success != 0)
-	{
-		printf("\e[32mWrote \e[36m%s\e[0m, %d, %d, %d, %zu\n", filename, m_Width, m_Height, m_Channels, m_Size);
-		return true;
-	}
-	else
+	if (!success)
 	{
 		printf("\e[31;1m Failed to write \e[36m%s\e[0m, %d, %d, %d, %zu\n", filename, m_Width, m_Height, m_Channels, m_Size);
 		return false;
 	}
+
+	printf("\e[32mWrote \e[36m%s\e[0m, %d, %d, %d, %zu\n", filename, m_Width, m_Height, m_Channels, m_Size);
+	return true;
 }
 
 ImageType Image::getFileType(const char *filename)
@@ -111,6 +151,11 @@ Details Image::getDetails() const
 {
 	return { m_Width, m_Height, m_Channels, m_Baseline, m_Size };
 }
+
+bool Image::isEmpty() const
+{
+	return m_Size == 0 ? true : false;
+};
 
 void Image::colorMask(float r, float g, float b)
 {
@@ -158,7 +203,7 @@ void Image::flip(AXIS axis)
 void Image::overlay(const Image &source, int x, int y)
 {
 	#ifdef DEBUG
-		printf("y: %d\n", y);
+		printf("[Image::overlay] x: %d, y: %d\n", x, y);
 	#endif
 
 	uint8_t *srcPx;
@@ -219,13 +264,50 @@ void Image::overlayText(const std::string& txt, const Font& font, int x, int y, 
 	for (size_t i = 0; i < len; ++i)
 	{
 
-		if (sft_char(&font.sft, txt[i], &c) != 0)
+		if (sft_char(&font.m_SFT, txt[i], &c) != 0)
 		{
 			printf("\e[31m[ERROR] Font is missing character '%c'\e[0m\n", txt[i]);
 			continue;
 		}
 
-		handleRaster(font, x, y, c, r, g, b, a);
+		for (uint16_t sy = 0;sy < c.height;++sy) 
+		{
+			dy = sy + y + c.y;
+			if(dy < 0) 
+				continue;
+			else if(dy >= m_Height) 
+				break;
+			for(uint16_t sx = 0;sx < c.width;++sx) 
+			{
+				dx = sx + x + c.x;
+				if(dx < 0) 
+					continue;
+				else if(dx >= m_Width) 
+					break;
+				dstPx = &m_Data[(dx + dy * m_Width) * m_Channels];
+				srcPx = c.image[sx + sy * c.width];
+
+				if(srcPx != 0) 
+				{
+					float srcAlpha = (srcPx / 255.f) * (a / 255.f);
+					float dstAlpha = m_Channels < 4 ? 1 : dstPx[3] / 255.f;
+					if(srcAlpha > .99 && dstAlpha > .99) 
+						memcpy(dstPx, color, m_Channels);
+					else 
+					{
+						float outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
+						if(outAlpha < .01) 
+							memset(dstPx, 0, m_Channels);
+						else {
+							for(int chnl = 0; chnl < m_Channels; ++chnl) 
+								dstPx[chnl] = (uint8_t)BYTE_BOUND((color[chnl]/255.f * srcAlpha + dstPx[chnl]/255.f * dstAlpha * (1 - srcAlpha)) / outAlpha * 255.f);
+							if(m_Channels > 3) 
+								dstPx[3] = (uint8_t)BYTE_BOUND(outAlpha * 255.f);
+						}
+					}
+				}
+			}
+		}
 
 		x += c.advance;
 		free(c.image);
@@ -246,18 +328,18 @@ void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, u
 
 	for (int i = 0; i < len; i++)
 	{
-
-		if (sft_char(&font.sft, txt[i], &c) != 0)
+		// if (font.m_SFT.font == NULL) throw Latex::ConversionException("", __FILE__, __LINE__);
+		if (sft_char(&font.m_SFT, txt[i], &c) != 0)
 		{
 			printf("\e[31m[ERROR] Font is missing character '%c'\e[0m\n", txt[i]);
 			continue;
 		};
 
 		#ifdef DEBUG
-			printf("x: %d, y: %d, width: %d, height: %d\n", c.x, c.y, c.width, c.height);
+			printf("[Image::rasterizeText] x: %d, y: %d, width: %d, height: %d, advance: %f\n", c.x, c.y, c.width, c.height, c.advance);
 		#endif
 
-		Image character(c.width + (c.advance - c.width), c.height, 4);
+		Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), c.height, 4);
 		character.m_Baseline = std::abs(c.y - 1);
 		character.m_AdvanceHeight = c.height - character.m_Baseline;
 
@@ -279,16 +361,16 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 
 	SFT_Char c;
 
-	if (sft_char(&font.sft, charCode, &c) != 0)
+	if (sft_char(&font.m_SFT, charCode, &c) != 0)
 	{
 		printf("\e[31m[ERROR] Font is missing character '%c'\e[0m\n", charCode);
-	};
+	}
 
 	#ifdef DEBUG
-		printf("x: %d, y: %d, width: %d, height: %d\n", c.x, c.y, c.width, c.height);
+		printf("[Image::rasterizeCharacter] char: %c, x: %d, y: %d, width: %d, height: %d, advance: %f\n", charCode, c.x, c.y, c.width, c.height, c.advance);
 	#endif
 
-	Image character(c.width + (c.advance - c.width), c.height, 4);
+	Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), c.height, 4);
 	character.m_Baseline = std::abs(c.y - 1);
 	character.m_AdvanceHeight = c.height - character.m_Baseline;
 
@@ -305,6 +387,8 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, c
 
 void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
+	PROFILE_SCOPE("Image::handleRaster");
+
 	int32_t dx, dy;
 	uint8_t *dstPx;
 	uint8_t srcPx;
@@ -312,14 +396,14 @@ void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, u
 
 	for (uint16_t sy = 0; sy < c.height; ++sy)
 	{
-		dy = sy + chr.m_Height + c.y - (chr.m_Height - std::abs(c.y + 1)); // dy = sy + c.y || dy = sy + character.height + c.y
+		dy = sy + chr.m_Height + c.y - (chr.m_Height - std::abs(c.y + 1));
 		if (dy < 0)
 			continue;
 		else if (dy >= chr.m_Height)
 			break;
 		for (uint16_t sx = 0; sx < c.width; ++sx)
 		{
-			dx = sx + c.x; // dx = sx + character.width + c.x
+			dx = sx + c.x;
 			if (dx < 0)
 				continue;
 			else if (dx >= chr.m_Width)
@@ -343,53 +427,6 @@ void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, u
 						for (int chnl = 0; chnl < chr.m_Channels; ++chnl)
 							dstPx[chnl] = (uint8_t)BYTE_BOUND((color[chnl] / 255.f * srcAlpha + dstPx[chnl] / 255.f * dstAlpha * (1 - srcAlpha)) / outAlpha * 255.f);
 						if (chr.m_Channels > 3)
-							dstPx[3] = (uint8_t)BYTE_BOUND(outAlpha * 255.f);
-					}
-				}
-			}
-		}
-	}
-}
-
-void Image::handleRaster(const Font& font, int x, int y,  SFT_Char& c, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-{
-	int32_t dx, dy;
-	uint8_t *dstPx;
-	uint8_t srcPx;
-	uint8_t color[4] = {r, g, b, a};
-
-	for (uint16_t sy = 0;sy < c.height;++sy) 
-	{
-		dy = sy + y + c.y;
-		if(dy < 0) 
-			continue;
-		else if(dy >= m_Height) 
-			break;
-		for(uint16_t sx = 0;sx < c.width;++sx) 
-		{
-			dx = sx + x + c.x;
-			if(dx < 0) 
-				continue;
-			else if(dx >= m_Width) 
-				break;
-			dstPx = &m_Data[(dx + dy * m_Width) * m_Channels];
-			srcPx = c.image[sx + sy * c.width];
-
-			if(srcPx != 0) 
-			{
-				float srcAlpha = (srcPx / 255.f) * (a / 255.f);
-				float dstAlpha = m_Channels < 4 ? 1 : dstPx[3] / 255.f;
-				if(srcAlpha > .99 && dstAlpha > .99) 
-					memcpy(dstPx, color, m_Channels);
-				else 
-				{
-					float outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-					if(outAlpha < .01) 
-						memset(dstPx, 0, m_Channels);
-					else {
-						for(int chnl = 0; chnl < m_Channels; ++chnl) 
-							dstPx[chnl] = (uint8_t)BYTE_BOUND((color[chnl]/255.f * srcAlpha + dstPx[chnl]/255.f * dstAlpha * (1 - srcAlpha)) / outAlpha * 255.f);
-						if(m_Channels > 3) 
 							dstPx[3] = (uint8_t)BYTE_BOUND(outAlpha * 255.f);
 					}
 				}
@@ -476,7 +513,8 @@ void Image::resizeNN(uint16_t nw, uint16_t nh)
 
 void Image::concat(const Image& image, ImagePosition position)
 {
-	*this = Image::concat(*this, image, position);
+	if (!image.isEmpty())
+		*this = Image::concat(*this, image, position);
 };
 
 Image Image::concat(const Image& left, const Image& right, ImagePosition position)
@@ -487,7 +525,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 
 	new_channels = left.m_Channels > right.m_Channels ? left.m_Channels : right.m_Channels;
 
-	//?if possible, add some sort of padding between images, like new_adv_h, but better
+	//?if possible, add some sort of padding between images
 
 	switch (position)
 	{
@@ -495,27 +533,31 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 		case ImagePosition::LEFT:
 		default:
 			new_w = left.m_Width + right.m_Width;
-			new_h = left.m_Height > right.m_Height ? left.m_Height : right.m_Height;
+			new_h = (left.m_Height - left.m_AdvanceHeight) > (right.m_Height - right.m_AdvanceHeight) ? left.m_Height : right.m_Height;
 			new_adv_h = left.m_AdvanceHeight > right.m_AdvanceHeight ? left.m_AdvanceHeight : right.m_AdvanceHeight;
+			// new_h += ((left.m_AdvanceHeight < right.m_AdvanceHeight) && (left.isEmpty() == false)) ? right.m_AdvanceHeight - left.m_AdvanceHeight : 0;
 			break;
 		case ImagePosition::TOP:
 		case ImagePosition::BOTTOM:
 			new_w = left.m_Width > right.m_Width ? left.m_Width : right.m_Width;
-			new_h = left.m_Height + left.m_AdvanceHeight + right.m_Height + right.m_AdvanceHeight;
+			new_h = left.m_Height + right.m_Height;
 			new_adv_h = 0;
 			break;
-	};
+	}
 
 	#ifdef DEBUG
-		printf("new_h - new_adv_h = %d\nright.height - right.advance_height = %d\n", new_h - new_adv_h, right.m_Height - right.m_AdvanceHeight);
+		printf("[Image::concat] left.width = %d, right.width = %d\n", left.m_Width, right.m_Width);
+		printf("[Image::concat] left.height = %d, right.height = %d\n", left.m_Height, right.m_Height);
+		printf("[Image::concat] left.adv_height = %d, right.adv_height = %d\n", left.m_AdvanceHeight, right.m_AdvanceHeight);
+		printf("[Image::concat] left.baseline = %d, right.baseline = %d\n", left.m_Baseline, right.m_Baseline);
+		printf("[Image::concat] new_h - new_adv_h = %d\n", (new_h - new_adv_h));
+		printf("[Image::concat] right.height - right.advance_height = %d, left.height - left.advance_height = %d\n", (right.m_Height - right.m_AdvanceHeight), (left.m_Height - left.m_AdvanceHeight));
 	#endif
 
 	if ((new_h - new_adv_h) < (right.m_Height - (right.m_AdvanceHeight < 0 ? 0 : right.m_AdvanceHeight))) new_h += (right.m_Height - (new_h - new_adv_h));
 
 	#ifdef DEBUG
-		printf("left baseline: %d, right baseline: %d\n", left.m_Baseline, right.m_Baseline);
-		printf("left height: %d, right height: %d, left adv height: %d, right adv height: %d\n", left.m_Height, right.m_Height, left.m_AdvanceHeight, right.m_AdvanceHeight);
-		printf("new_h: %d, new_w: %d, new_adv_h: %d\n", new_h, new_w, new_adv_h);		
+		printf("[Image::concat] new height = %d, new width = %d, new adv height = %d\n", new_h, new_w, new_adv_h);		
 	#endif
 
 	Image newImage(new_w, new_h, new_channels);
@@ -523,34 +565,62 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 	newImage.m_Baseline = left.m_Baseline > right.m_Baseline ? left.m_Baseline : right.m_Baseline;
 
 	#ifdef DEBUG
-		printf("newImage height: %d, newImage width: %d, newImage adv height: %d\n\n", newImage.m_Height, newImage.m_Width, newImage.m_AdvanceHeight);
+		printf("[Image::concat] newImage height: %d, newImage width: %d, newImage adv height: %d, newImage baseline: %d\n\n", newImage.m_Height, newImage.m_Width, newImage.m_AdvanceHeight, newImage.m_Baseline);
 	#endif
 
 	switch(position)
 	{
 		case ImagePosition::RIGHT:
 		default:
+			#ifdef DEBUG
+				printf("[Image::concat] left side concatenation\n");
+			#endif
 			newImage.overlay(left, 0, newImage.m_Baseline > 0 ? newImage.m_Baseline - left.m_Baseline : 0); 
+			#ifdef DEBUG
+				printf("[Image::concat] right side concatenation\n");
+			#endif
 			newImage.overlay(right, left.m_Width, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0); 
 			break;
 		case ImagePosition::LEFT:
+			#ifdef DEBUG
+				printf("[Image::concat] right side concatenation\n");
+			#endif
 			newImage.overlay(right, 0, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
+			#ifdef DEBUG
+				printf("[Image::concat] left side concatenation\n");
+			#endif
 			newImage.overlay(left, right.m_Width, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
 			break;
 		case ImagePosition::TOP:
-			newImage.overlay(right, 0, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
-			newImage.overlay(left, 0, right.m_Height + newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
+			#ifdef DEBUG
+				printf("[Image::concat] right side concatenation\n");
+			#endif
+			newImage.overlay(right, 0, 0);
+			#ifdef DEBUG
+				printf("[Image::concat] left side concatenation\n");
+			#endif
+			newImage.overlay(left, 0, right.m_Height);
 			break;
 		case ImagePosition::BOTTOM:
-			newImage.overlay(left, 0, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
-			newImage.overlay(right, 0, left.m_Height + newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
+			#ifdef DEBUG
+				printf("[Image::concat] left side concatenation\n");
+			#endif
+			newImage.overlay(left, 0, 0);
+			#ifdef DEBUG
+				printf("[Image::concat] right side concatenation\n");
+			#endif
+			newImage.overlay(right, 0, left.m_Height);
 			break;
-	};
+	}
+	#ifdef DEBUG
+		printf("\n");
+	#endif
 
 	return newImage;
 };
 
 void Image::operator=(const Image& origin) {
+	if (origin.isEmpty()) return;
 	m_Width = origin.m_Width;
 	m_Height = origin.m_Height;
 	m_Channels = origin.m_Channels;

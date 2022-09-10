@@ -17,10 +17,6 @@ enum ImagePosition { LEFT, RIGHT, TOP, BOTTOM };
 
 enum AXIS { X, Y };
 
-struct Cyrillic;
-
-struct Greek;
-
 struct Color;
 
 struct Details;
@@ -29,28 +25,37 @@ class Font {
 
 	public:
 
+		/*
+			@brief Constructs Font instance
+		*/
 		Font() = default;
 
-		Font(const char* fontfile, uint16_t size) {
-			if((sft.font = sft_loadfile(fontfile)) == NULL) {
-				printf("\e[31m[ERROR] Failed to load %s\e[0m\n", fontfile);
-				return;
-			};
-			setSize(size);
-		};
+		/*
+			@brief Constructs Font instance
+			@param fontFile Path to font
+			@param size Font size
+		*/
+		Font(const char* fontFile, uint16_t size);
 
-		~Font() {
-			sft_freefont(sft.font);
-		};
+		~Font();
 
-		void setSize(uint16_t size) {
-			sft.xScale = size;
-			sft.yScale = size;
-		};
+		/*
+			@brief Sets font file
+			@param fontFile Font file
+		*/
+		bool setFont(const char* fontFile);
+
+		/*
+			@brief Sets font size
+			@param size Font size
+		*/
+		void setSize(uint16_t size);
 
 	public:
 
-		SFT sft = {NULL, 12, 12, 0, 0, SFT_DOWNWARD_Y|SFT_RENDER_IMAGE};
+		const char* m_FontFile;
+
+		SFT m_SFT = {NULL, 12, 12, 0, 0, SFT_DOWNWARD_Y|SFT_RENDER_IMAGE};
 
 };
 
@@ -109,6 +114,11 @@ class Image {
 			@return image details (width, height, channels, size, etc.)
 		*/
 		Details getDetails() const;
+
+		/*
+			@brief Check if image class is blank
+		*/
+		bool isEmpty() const;
 
 		/**/
 		void colorMask(float r, float g, float b);
@@ -238,16 +248,6 @@ class Image {
 		/*
 			@brief Handle rasterization of a character. Freeing of an image is on a user
 			@param font Font to use for rasterization
-			@param x,y Position on image
-			@param chr Image pointer
-			@param c SFT_Char struct containing character data
-			@param r,g,b,a RGBA params (0-255)
-		*/
-		void handleRaster(const Font& font, int x, int y,  SFT_Char& c, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
-
-		/*
-			@brief Handle rasterization of a character. Freeing of an image is on a user
-			@param font Font to use for rasterization
 			@param chr Image pointer
 			@param c SFT_Char struct containing character data
 			@param r,g,b,a RGBA params (0-255)
@@ -326,49 +326,20 @@ static Letter cyr_table[] =
 	{"ya", 1103}
 };
 
-struct Greek {
-	enum Capital {
-		ALPHA = 913,
-		BETA,
-		GAMMA,
-		DELTA,
-		EPSILON,
-		ZETA,
-		ETA,
-		THETA,
-		IOTA,
-		KAPPA,
-		LAMBDA,
-		MU,
-		PI = 928,
-		RHO,
-		SIGMA,
-		TAU,
-		PHI = 934,
-		PSI = 936,
-		OMEGA
-	};
-	enum Normal {
-		/*  */
-		alpha = 945,
-		beta,
-		gamma,
-		delta,
-		epsilon,
-		zeta,
-		eta,
-		theta,
-		iota,
-		kappa,
-		lambda,
-		mu,
-		pi = 960,
-		rho,
-		tau,
-		phi = 966,
-		psi = 968,
-		omega
-	};
+static Letter greek_table[] =
+{
+	{"Alpha", 913}, {"Beta", 914}, {"Gamma", 915}, {"Delta", 916},
+	{"Epsilon", 917}, {"Zeta", 918}, {"Eta", 919}, {"Theta", 920},
+	{"Iota", 921}, {"Kappa", 922}, {"Lambda", 923}, {"Mu", 924},
+	{"Nu", 925}, {"Xi", 926}, {"Omicron", 927}, {"Pi", 928},
+	{"Rho", 929}, {"Sigma", 930}, {"Tau", 931}, {"Upsilon", 932},
+	{"Phi", 933}, {"Chi", 934}, {"Psi", 935}, {"Omega", 936},
+	{"alpha", 945}, {"beta", 946}, {"gamma", 947}, {"delta", 948},
+	{"epsilon", 949}, {"zeta", 950}, {"eta", 951}, {"theta", 952},
+	{"iota", 953}, {"kappa", 954}, {"lambda", 955}, {"mu", 956},
+	{"nu", 957}, {"xi", 958}, {"omicron", 959}, {"pi", 960},
+	{"rho", 961}, {"sigma", 963}, {"tau", 964}, {"upsilon", 965},
+	{"phi", 966}, {"chi", 967}, {"psi", 968}, {"omega", 969},
 };
 
 struct Math {
