@@ -3,7 +3,7 @@ TARGET		:= "dumbtex"
 BUILDDIR	:= build
 SRCDIR		:= src
 CFLAGS		:= -std=c++20 -g
-CPRODFLAGS 	:= -std=c++20 -g -O2
+CPRODFLAGS 	:= -std=c++20 -g -O3
 SRCEXT		:= cpp
 SOURCES 	:= $(wildcard $(SRCDIR)/*.$(SRCEXT))
 OBJECTS		:= $(patsubst $(SRCDIR)/%, $(BUILDDIR)/%, $(SOURCES:.$(SRCEXT)=.o))
