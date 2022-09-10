@@ -4,8 +4,8 @@
 int main(int argc, char* argv[]) {
     
     #if defined(DEBUG) || defined(PROFILER)
-        Instrumentor::Get().BeginSession("Profile");
-        {
+    Instrumentor::Get().BeginSession("Profile");
+    {
     #endif
     
     PROFILE_FUNCTION();
@@ -14,13 +14,13 @@ int main(int argc, char* argv[]) {
     try
     {
         //create runtime font setter
-        latex.setFonts("./fonts/OpenSans-Regular.ttf", "", "");
+        latex.setFonts("./fonts/OpenSans-Regular.ttf", "./fonts/OpenSans-Italic.ttf", "./fonts/OpenSans-Bold.ttf", "./fonts/OpenSans-BoldItalic.ttf");
 
         std::string equation = argv[1];
-        std::string filepath = argv[2];
+        const char* filepath = argv[2];
 
-        if (argc >= 2)
-            switch(Image::getFileType(filepath.c_str()))
+        if (argc >= 3)
+            switch(Image::getFileType(filepath))
             {
                 case ImageType::PNG:
                     latex.toPNG(equation, filepath);
@@ -35,9 +35,9 @@ int main(int argc, char* argv[]) {
                     latex.toTGA(equation, filepath);
                     break;   
                 case ImageType::NO_TYPE:
-                    throw Latex::FileException("No file type", __FILE__, __LINE__); 
+                    throw Latex::FileException("No file type.", __FILE__, __LINE__); 
                 case ImageType::UNKNOWN:
-                    throw Latex::FileException("Unknown file type", __FILE__, __LINE__);
+                    throw Latex::FileException("Unknown file type.", __FILE__, __LINE__);
             }
     
     }
@@ -55,8 +55,8 @@ int main(int argc, char* argv[]) {
     }
 
     #if defined(DEBUG) || defined(PROFILER)
-        }
-        Instrumentor::Get().EndSession();
+    }
+    Instrumentor::Get().EndSession();
     #endif
     
 };
