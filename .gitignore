@@ -1,8 +1,2 @@
-.vs/
-.vscode/
 build/
-CppProperties.json
-src/unit-test.txt
-results.json
-TODO
 *.exe
