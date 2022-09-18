@@ -1,12 +1,17 @@
-"\sum_{n=1}^N{a+b}" ->
-"\sum_n^N{a+b}" ->
-"\sum^N{a+b}" ->
-"\sum_{n=1}{a+b}+e+f" -> "{}"
+"\sum_{n=1}^N{a+b}"   -> sum symbol, below is "n equals 1" and above is "a plus b" 
+"\sum_n^N{a+b}"       -> sum symbol, below is "n", above is "N" and "a plus b" to the right
+"\sum^N{a+b}"         -> sum symbol, above is "N" and "a plus b" to the right
+"\sum_{n=1}{a+b}+e+f" -> sum symbol, below is "n equals 1" and "a plus b plus e plus f" to the right
 
-"a_i+b" -> "{a_i}{+b}"
-"a+b_i" -> "{a+}{b_i}"
-"a_{i-n}+b" -> "{a_{i-n}}{+b}"
+"a_i+b"     -> "a" with index "i" plus "b"
+"a+b_i"     -> "a" plus "b" with index "i"
+"a_{i-n}+b" -> "a" with index "i minus n" plus "b"
 
-"\color{red}{a+b}" -> "a+b" but colored
+"\cyr{privet}" -> "привет"
+"\greek{abg}"  -> "αβγ"
+
+"\red{a+b}" -> "a+b" but colored
+"\red~a+b"  -> "a+b" but colored
+
 "\color{255,255,0}{a+b}" -> "a+b" but colored
-"\color{255,255,0,125}{a+b}" -> "a+b" but colored
+"\color{255,255,0}~a+b"  -> "a+b" but colored
