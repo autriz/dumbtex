@@ -1,424 +1,571 @@
 #include "Latex.hpp"
 
-Latex::Latex(WarningBehavior behavior): p_WarningBehavior(behavior) { };
+Latex::Latex(WarningBehavior behavior): p_WarningBehavior(behavior), p_SelectedFont(&m_NormalFont) { };
 
 Latex::~Latex() { };
 
-/*Name is subject to change. Finds not closed bracket pair and closes it*/
-void testt(std::string& expr)
-{
-    std::stack<char> brackets;
-
-    for (int i = 0; i < expr.length(); i++)
-    {
-        if (expr[i] == '{')
-            brackets.push(expr[i]);
-        if (expr[i] == '}')
-            if (brackets.size() > 0)
-                brackets.pop();
-            else
-                expr.erase(i, 1);
-        
-    }
-
-    if (!brackets.empty())
-        expr.append("}");
-};
-
 Image Latex::toImage(std::string& expression)
 {
-    PROFILE_SCOPE("Latex::toImage");
+	PROFILE_SCOPE("Latex::toImage");
 
-    /*
+	/*
 
-        Preprocess and rasterization
+		Preprocess and rasterization
 
-        Iteration processing symbol or function (like "\sum")
+		Iteration processing symbol or function (like "\sum")
 
-        If iteration is processing function, that iteration is split up by atoms
-         
-    */
+		If iteration is processing function, that iteration is split up by atoms
+		 
+	*/
 
    /*
-        toImage()
-        |__rastlimits()
-           |__rastscripts()
-              |__texscripts()
+		toImage()
+		|__rastlimits()
+		   |__rastscripts()
+			  |__texscripts()
    
    */
 
    /*
    
-        TODO:
-        Render text onto image and save in file
-        Allow to override all file if current exists
+		TODO:
+		Render text onto image and save in file
+		Allow to override all file if current exists
 
-        if "\alpha" is present in string, render alpha symbol
+		if "\alpha" is present in string, render alpha symbol
 
-        prepExpression() should split expression string to parts with function handlers (if needed one)
-        then all those images should be rasterized and concatenated
+		prepExpression() should split expression string to parts with function handlers (if needed one)
+		then all those images should be rasterized and concatenated
 
-        and it should be done for a project
+		and it should be done for a project
 
    */
 
-    Image finalImage;
+	// Font font(p_NormalFont, 50); //Should be initialized when rasterization is needed
 
-    testt(expression);
+	Image finalImage;
 
-    // Font font(p_NormalFont, 50); //Should be initialized when rasterization is needed
+	size_t i, j;
+	static bool isFirstIteration = false;
+	SubFunction subFunction;
 
-    int i, j;
-    SubFunction subFunction;
+	if (isFirstIteration == false) 
+	{
+		prepExpression(expression); //prepare expression to find unsupported subfunctions and remove unnecessary braces, if found
+		isFirstIteration = true;
+	}
 
-    prepExpression(expression); //prepare expression to find unsupported subfunctions and remove unnecessary braces, if found
+	#ifdef DEBUG
+		printf("[Latex::toImage] start expression: %s\n", expression.c_str());
+	#endif
 
-    #ifdef DEBUG
-        printf("[Latex::toImage] start expression: %s\n", expression.c_str());
-    #endif
+	while (expression.length() > 0)
+	{
+		for (i = 0; i < expression.length(); i++)
+		{
+			//if expression[i] == '{' and expression[i-1] != '\\' then
+			//find '}', check if '}' not escaped
+			//if '}' not found, add it to the end of expression
+			//cut expression between '{' and '}'
+			//remove '{' and '}'
+			//parse it to toImage() again
+			//concat with finalImage
+			if (expression[i] == '_' || expression[i] == '^')
+			{
+				//rasterize sup/subscripts
+				break;
+			}
+			else if (expression[i] == '{')
+			{
+				size_t rightBracketIndex;
+				std::string subexpression;
 
-    while (expression.length() > 0)
-    {
-        for (i = 0; i < expression.length(); i++)
-        {
-            //if expression[i] == '{' and expression[i-1] != '\\' then
-            //find '}', check if '}' not escaped
-            //if '}' not found, add it to the end of expression
-            //cut expression between '{' and '}'
-            //remove '{' and '}'
-            //parse it to toImage() again
-            //concat with finalImage
-            if (expression[i] == '{' && expression[i-1] != '\\')
-            {
-                size_t rightBracketIndex;
-                std::string subexpression;
+				if ((rightBracketIndex = expression.find_last_of('}', i)) == std::string::npos || (expression[rightBracketIndex - 1] == '\\'))
+				{
+					expression.push_back('}');
+					rightBracketIndex = expression.length() - 1;
+				}
 
-                //?Find all open and close brackets (not escaped)
-                //?If open bracket does not have a close pair, add it
+				subexpression = expression.substr(i + 1, rightBracketIndex - i - 2);
+				expression.erase(i, subexpression.length() + 3);
 
-                if ((rightBracketIndex = expression.find_last_of('}', i)) == std::string::npos || (expression[rightBracketIndex - 1] == '\\'))
-                {
-                    expression.push_back('}');
-                    rightBracketIndex = expression.length() - 1;
-                }
+				if (expression.length() <= 0)
+				{
+					expression = subexpression;
+					break;
+				}
+				else
+				{
+					Image tempImage = toImage(subexpression);
+					finalImage.concat(tempImage);
+				}
+			}
+			else if (expression[i] == '\\')
+			{
+				if ((subFunction = getSubFunction(expression, i)).expression != NULL)
+				{
+					//?Esaped delimeters like "\}" or "\{" are processed after everything between them is rasterized
+					//?Because escaped delims depend on size of all expression
 
-                subexpression = expression.substr(i + 1, rightBracketIndex - i - 2);
-                expression.erase(i, subexpression.length() + 3);
+					//!Take inspiration from MimeTeX's texsubexpr() function, quite a gold mine
 
-                if (expression.length() <= 0)
-                {
-                    expression = subexpression;
+					expression.erase(i, strlen(subFunction.expression)); 
+					if (subFunction.handler) 
+						subFunction.handler(*this, expression, finalImage, subFunction.type);
+				}
+				else 
+				{
+					for (j = i; j < expression.length(); j++)
+					{
+						if (expression[j] == '{' || isdigit(expression[j]) || expression[j] == '~')
+							expression.erase(i, j - i); //or enclose it in [] and add '?' at the end of function
+					}
 
-                    break;
-                }
-                else
-                {
-                    Image tempImage = toImage(subexpression);
-                    finalImage.concat(tempImage);
-                }
-            }
-            else if (expression[i] == '\\')
-            {
-                if ((subFunction = getSubFunction(expression, i)).expression != NULL)
-                {
+					j = 0;
+				}
+				break;
+			}
+			else
+			{
+				finalImage.rasterizeCharacter(expression[i], *p_SelectedFont, p_Color);
+				expression.erase(i, 1);
+				break;
+			}
+		}
 
-                    //?Esaped delimeters like "\}" or "\{" are processed after everything between them is rasterized
-                    //?Because escaped delims depend on size of all expression
+		i = 0;
 
-                    //!Take inspiration from MimeTeX's texsubexpr() function, quite a gold mine
+		#ifdef DEBUG
+			printf("[Latex::toImage] expression: %s\n", expression.c_str());
+		#endif
+	}
 
-                    // std::cout << getSubExpression(expression, i + strlen(subfunctions[subfunc_index].expression), "{", "}", true) << "\n";
-
-                    expression.erase(i, strlen(subFunction.expression)); 
-                    if (subFunction.handler) 
-                        subFunction.handler(*this, expression, finalImage, subFunction.type);
-
-                    // if (subfunctions[subfunc_index].handler) subfunctions[subfunc_index].handler(*this, expression); //find arguments for handler and pass it
-                    //should return image for further concatenation with final image
-                    //remove rasterized part of expression  
-                    // expression.erase(i,)
-                }
-                else 
-                {
-                    for (j = i; j < expression.length(); j++)
-                    {
-                        if (expression[j] == '{' || isdigit(expression[j]) || expression[j] == '~')
-                            expression.erase(i, j - i); //or enclose it in [] and add '?' at the end of function
-                    }
-
-                    j = 0;
-                }
-                break;
-            }
-            else
-            {
-                // Image tempImage;
-
-                // tempImage.rasterizeCharacter(expression[i], m_NormalFont, p_Color);
-                // finalImage.concat(tempImage);
-                // expression.erase(i, 1);
-
-                finalImage.rasterizeCharacter(expression[i], m_NormalFont, p_Color);
-                expression.erase(i, 1);
-                break;
-            }
-        }
-
-        i = 0;
-
-        #ifdef DEBUG
-            printf("[Latex::toImage] expression: %s\n", expression.c_str());
-        #endif
-    }
-
-    return finalImage.isEmpty() ? NULL : finalImage;
-
+	return finalImage.isEmpty() ? NULL : finalImage;
 };
 
 void Latex::prepExpression(std::string& expression)
 {
-    //!Erase all spaces
+	PROFILE_SCOPE("Latex::prepExpression");
 
-    if (expression.length() == 0)
-        return;
+	if (expression.length() == 0)
+		return;
 
-    const char* comment = "%%";
+	const char* comment = "%%";
+	std::stack<char> brackets;
+	size_t startIndex, endIndex;
 
-    size_t startIndex, endIndex;
+	//Find and erase comments
+	while ((startIndex = expression.find_first_of(comment)) != std::string::npos) //found start of the comment
+	{
+		if ((endIndex = expression.find_first_of(comment, startIndex + 1)) != std::string::npos) //if end is found
+		{
+			expression.erase(startIndex, endIndex - startIndex + 1); //erase comment
+			break;
+		}
+		else //if end not found
+		{
+			expression.erase(startIndex); //erase all expression
+			break;
+		}
+	}
 
-    //Find and erase comments
-    while ((startIndex = expression.find_first_of(comment)) != std::string::npos) //found start of the comment
-    {
-        if ((endIndex = expression.find_first_of(comment, startIndex + 1)) != std::string::npos) //if end is found
-        {
-            expression.erase(startIndex, endIndex - startIndex + 1); //erase comment
-            break;
-        }
-        else //if end not found
-        {
-            expression.erase(startIndex); //erase all expression
-            break;
-        }
-    }
+	//Fix unbalanced brackets
+	for (int i = 0; i < expression.length(); i++)
+	{
+		if (expression[i] == '{') // found open bracket
+			brackets.push(expression[i]); // push it to stack
 
-    //Fix unbalanced brackets
-    // for (int i = 0; i < expression.length(); i++)
-    // {
-        //find {
-        //place it in stack or smth
-        //if } is found, remove one { from stack
-        //if something is left in stack, brackets are unbalanced
-        //then get index where we stopped and add there closing bracket
+		if (expression[i] == '}') // found close bracket
+			if (brackets.size() > 0) // if stack isn't empty
+				brackets.pop(); // remove open bracket from stack
+			else
+				expression.erase(i, 1); // erase unfixed close bracket
+	}
 
-        //OR
+	if (!brackets.empty())
+		for (int i = 0; i < brackets.size(); i++)
+			expression.append("}"); //add close bracket for every unfixed open bracket
 
-    // }
+	//Erase spaces
 
-    //Convert \\left( to \\( and \\right) to \\)
-    // while ( )
+	//Convert \\left( to \\( and \\right) to \\)
+	// while ( )
 };
 
 Image Latex::texScripts(std::string expression, int at)
 {
-
+	Image img;
+	return img;
 };
 
-std::string Latex::getSubExpression(std::string& expression, int from, const char* left, const char* right, bool returnDelims)
+void rastLimits(std::string& expression, Image& image)
 {
-    PROFILE_SCOPE("Latex::getSubExpression");
+	//called if subscript or superscript is found
+	//if 0-th index of expression is subscript, then
+		//check if opening bracket is present on 1-st index
+		//if it is, rasterize expression between brackets on size lower than main expression
+		//else rasterize next character on size lower than main expression
+	//else if its sup(er)script
+		//check if opening bracket is present on 1-st index
+		//if it is, rasterize expression between brackets on size lower than main expression
+		//else rasterize next character on size lower than main expression
+	//remove rasterized sub/supscript and if 0-th index of expression again sub/supscript, do it again
+};
 
-    unsigned first = expression.find(left, from); //find index of left delimeter
-    if (first > from) return NULL;
+std::string Latex::getSubExpression(std::string& expression, int from, const char left, const char right, bool returnDelims)
+{
+	PROFILE_SCOPE("Latex::getSubExpression");
 
-    unsigned last = expression.find(right, from); //find index of right delimeter
+	unsigned first, last;
+	std::stack<char> brackets;
 
-    while (expression[last - 1] == '\\') //if delimeter is escaped
-        last = expression.find(right, last+1); //find right delimeter again
+	first = expression.find(left, from); //find index of left delimeter
+	if (first > from) return NULL;
 
-    return returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
+	for (int i = 0; i < expression.length(); i++) //find index of right delimeter
+	{
+		if (expression[i] == left)
+			brackets.push(expression[i]);
+		if (expression[i] == right)
+			if (brackets.size() > 1)
+				brackets.pop();
+			else
+			{
+				last = i;
+				break;
+			}
+	}
+
+	while (expression[last - 1] == '\\') //if delimeter is escaped
+		last = expression.find(right, last+1); //find right delimeter again
+
+	return returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
 };
 
 SubFunction Latex::getSubFunction(const std::string& expression, int at)
 {
-    PROFILE_SCOPE("Latex::getSubFunction");
+	PROFILE_SCOPE("Latex::getSubFunction");
 
-    size_t i, match;
+	size_t i, match;
 
-    for (i = 0; subfunctions[i].expression != NULL; i++) //iterate through subfunction list
-    {
-        match = expression.find(subfunctions[i].expression, at); //get match
+	for (i = 0; subfunctions[i].expression != NULL; i++) //iterate through subfunction list
+	{
+		match = expression.find(subfunctions[i].expression, at); //get match
 
-        if (match != std::string::npos && match == at) //if matches
-            return subfunctions[i];
-    };
-    return subfunctions[i]; //if not, should return NULL defined subfunction (dummy)
+		if (match != std::string::npos && match == at) //if matches
+			return subfunctions[i];
+	};
+	return subfunctions[i]; //if not, should return NULL defined subfunction (dummy)
 }; 
 
 void Latex::toPNG(std::string& expression,  const char* filepath) 
 { 
-    Image image = toImage(expression);
+	Image image = toImage(expression);
 
-    if (!image.isEmpty())
-        image.write(filepath, ImageType::PNG);
-    else
-        throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__);
+	if (!image.isEmpty())
+		image.write(filepath, ImageType::PNG);
+	else
+		throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__);
 };
 
 void Latex::toJPG(std::string& expression,  const char* filepath) 
 { 
-    Image image = toImage(expression);
+	Image image = toImage(expression);
 
-    if (!image.isEmpty())
-        image.write(filepath, ImageType::JPG);
-    else
-        throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
+	if (!image.isEmpty())
+		image.write(filepath, ImageType::JPG);
+	else
+		throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
 };
 
 void Latex::toBMP(std::string& expression,  const char* filepath)
 {
-    Image image = toImage(expression);
+	Image image = toImage(expression);
 
-    if (!image.isEmpty())
-        image.write(filepath, ImageType::BMP);
-    else
-        throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
+	if (!image.isEmpty())
+		image.write(filepath, ImageType::BMP);
+	else
+		throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
 };
 
 void Latex::toTGA(std::string& expression,  const char* filepath)
 {
-    Image image = toImage(expression);
+	Image image = toImage(expression);
 
-    if (!image.isEmpty())
-        image.write(filepath, ImageType::TGA);
-    else
-        throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
+	if (!image.isEmpty())
+		image.write(filepath, ImageType::TGA);
+	else
+		throw Latex::ParseException("There's nothing to rasterize.", __FILE__, __LINE__); 
 };
 
-void Latex::setNormalFont(const char* path_to_font, uint16_t size) 
+void Latex::setFont(FontType type, const char* pathToFont, uint16_t size) 
 { 
-    m_NormalFont.setFont(path_to_font);
-    m_NormalFont.setSize(size);
-};
-
-void Latex::setItalicFont(const char* path_to_font, uint16_t size) 
-{ 
-    m_ItalicFont.setFont(path_to_font);
-    m_ItalicFont.setSize(size); 
-};
-
-void Latex::setBoldFont(const char* path_to_font, uint16_t size)
-{
-    m_BoldFont.setFont(path_to_font);
-    m_BoldFont.setSize(size);
-};
-
-void Latex::setBoldItalicFont(const char* path_to_font, uint16_t size)
-{
-    m_BoldItalicFont.setFont(path_to_font);
-    m_BoldItalicFont.setSize(size);
+	switch(type)
+	{
+		case FontType::Normal:
+			m_NormalFont.setFont(pathToFont);
+			m_NormalFont.setSize(size);
+			break;
+		case FontType::Italic:
+			m_ItalicFont.setFont(pathToFont);
+			m_ItalicFont.setSize(size);
+			break;
+		case FontType::Bold:
+			m_BoldFont.setFont(pathToFont);
+			m_BoldFont.setSize(size);
+			break;
+		case FontType::BoldItalic:
+			m_BoldItalicFont.setFont(pathToFont);
+			m_BoldItalicFont.setSize(size);
+			break;
+	}
 };
 
 void Latex::setFonts(const char* normal, const char* italic, const char* bold, const char* boldItalic) 
 { 
-    PROFILE_SCOPE("Latex::setFonts");
+	PROFILE_SCOPE("Latex::setFonts");
 
-    if (strlen(normal) > 0) this->setNormalFont(normal); 
-    if (strlen(italic) > 0) this->setItalicFont(italic); 
-    if (strlen(bold) > 0) this->setBoldFont(bold);
-    if (strlen(boldItalic) > 0) this->setBoldItalicFont(boldItalic);
+	if (strlen(normal) > 0) this->setFont(FontType::Normal, normal); 
+	if (strlen(italic) > 0) this->setFont(FontType::Italic, italic); 
+	if (strlen(bold) > 0) this->setFont(FontType::Bold, bold);
+	if (strlen(boldItalic) > 0) this->setFont(FontType::BoldItalic, boldItalic);
+};
+
+Font& Latex::getSelectedFont()
+{
+	return *p_SelectedFont;
+};
+
+void Latex::setSelectedFont(FontType type)
+{
+	switch(type)
+	{
+		case FontType::Normal:
+			p_SelectedFont = &m_NormalFont;
+			break;
+		case FontType::Italic:
+			p_SelectedFont = &m_ItalicFont;
+			break;
+		case FontType::Bold:
+			p_SelectedFont = &m_BoldFont;
+			break;
+		case FontType::BoldItalic:
+			p_SelectedFont = &m_BoldItalicFont;
+			break;
+	}
 };
 
 void Latex::setFontColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
-    this->p_Color = {r, g, b, a};
+	this->p_Color = {r, g, b, a};
 };
 
 void Latex::setFontColor(const Color& color)
 {
-    this->p_Color = color;
+	this->p_Color = color;
 };
 
 const Color& Latex::getFontColor()
 {
-    return this->p_Color;
+	return this->p_Color;
 }
 
 void Latex::warningBehavior(WarningBehavior behaviour) 
 { 
-    this->p_WarningBehavior = behaviour; 
+	this->p_WarningBehavior = behaviour; 
 };
 
 const Latex::WarningBehavior& Latex::warningBehavior()
 { 
-    return this->p_WarningBehavior; 
+	return this->p_WarningBehavior; 
 };
 
 Color hexToRGBA(const std::string& hex, uint8_t alpha)
 {
-    return hexToRGBA(std::stoi(hex, 0, 16), alpha);
+	return hexToRGBA(std::stoi(hex, 0, 16), alpha);
 };
 
 Color hexToRGBA(const int& hex, uint8_t alpha)
 {
-    Color RGBA {0, 0, 0, alpha};
+	Color RGBA {0, 0, 0, alpha};
 
-    RGBA.r = (uint8_t)((hex >> 16) & 0xFF);
-    RGBA.g = (uint8_t)((hex >> 8) & 0xFF);
-    RGBA.b = (uint8_t)((hex) & 0xFF);
+	RGBA.r = (uint8_t)((hex >> 16) & 0xFF);
+	RGBA.g = (uint8_t)((hex >> 8) & 0xFF);
+	RGBA.b = (uint8_t)((hex) & 0xFF);
 
-    return RGBA;
+	return RGBA;
 };
 
-void Handlers::test_newline(Latex& latex, std::string& expression, Image& image, SubFunctionType arg1)
+void Handlers::rastNewline(Latex& latex, std::string& expression, Image& image, SubFunctionType arg1)
 {
-    image.concat(latex.toImage(expression), ImagePosition::BOTTOM);
+	image.concat(latex.toImage(expression), ImagePosition::BOTTOM);
 };
 
-void Handlers::test_color(Latex& latex, std::string& expression, Image& image, SubFunctionType colorType)
+void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, SubFunctionType colorType)
 {
 
-    Image tempImage;
-    std::string hex, arg;
-    //?if called, should set color temporarily or permanently, if 1st char is "~"
-    //!create temporary color handler
+	Image tempImage;
 
-    switch(colorType)
-    {
-        case COLOR_CUSTOM:
-            hex = Latex::getSubExpression(expression, 0, "{", "}", false);
-            if (hex.length() == 0) return;
+	//?if called, should set color temporarily or permanently, if 1st char is "~"
+	//!create temporary color handler
 
-            expression.erase(0, hex.length() + 2);
-            break;
-        case COLOR_RED:
-            hex = "ff0000";
-            break;
-    }
-    
-    if (expression[0] == '~') //color all text after subfunction 
-    {
-        arg = expression.substr(1);
-        expression.erase(0);
-        if (arg.length() == 0) return;
+	if (colorType == COLOR_GRADIENT) //color with gradient
+	{
+		std::string hex1, hex2, arg;
 
-        latex.setFontColor(hexToRGBA(hex));
+		hex1 = Latex::getSubExpression(expression, 0, '{', '}', false);
 
-        tempImage = latex.toImage(arg);
-        if (!tempImage.isEmpty()) image.concat(tempImage);
-    }
-    else //color only text in brackets
-    {
-        arg = Latex::getSubExpression(expression, 0, "{", "}", false);
-        if (arg.length() == 0) return;
+		if (hex1.length() == 0)
+			return;
 
-        Color tempColor = latex.getFontColor();
-        expression.erase(0, arg.length() + 2);
+		expression.erase(0, hex1.length() + 2);
 
-        latex.setFontColor(hexToRGBA(hex));
+		hex2 = Latex::getSubExpression(expression, 0, '{', '}', false);
 
-        tempImage = latex.toImage(arg);
-        if (!tempImage.isEmpty()) image.concat(tempImage);
+		if (hex2.length() == 0)
+			return;
 
-        latex.setFontColor(tempColor);
-    }
+		expression.erase(0, hex2.length() + 2);
+
+		if (expression[0] == '~')
+		{
+			arg = expression.substr(1);
+			expression.erase(0);
+		}
+		else
+		{
+			arg = Latex::getSubExpression(expression, 0, '{', '}', false);
+			if (arg.length() == 0) 
+				return;
+
+			expression.erase(0, arg.length() + 2);
+		}
+
+		tempImage = latex.toImage(arg);
+		tempImage.gradient(hexToRGBA(hex1), hexToRGBA(hex2));
+	}
+	else //color with certain color
+	{
+		Color tempColor = latex.getFontColor();
+		std::string hex, arg;
+		
+		switch(colorType)
+		{
+			case COLOR_CUSTOM:
+				hex = Latex::getSubExpression(expression, 0, '{', '}', false);
+				if (hex.length() == 0) 
+					return;
+
+				expression.erase(0, hex.length() + 2);
+				break;
+			case COLOR_RED:
+				hex = "ff0000";
+				break;
+		}
+		
+		latex.setFontColor(hexToRGBA(hex));
+
+		if (expression[0] == '~') //color all text after subfunction 
+		{
+			arg = expression.substr(1);
+			expression.erase(0);
+			if (arg.length() == 0)
+				return;
+
+			tempImage = latex.toImage(arg);
+		}
+		else //color only text in brackets
+		{
+			arg = Latex::getSubExpression(expression, 0, '{', '}', false);
+			if (arg.length() == 0) 
+				return;
+
+			expression.erase(0, arg.length() + 2);
+
+			tempImage = latex.toImage(arg);
+
+			latex.setFontColor(tempColor);
+		}
+	}
+
+	if (!tempImage.isEmpty()) 
+		image.concat(tempImage);
+};
+
+void Handlers::rastRaise(Latex& latex, std::string& expression, Image& image, SubFunctionType arg1)
+{
+	Image tempImage;
+	int lift_num;
+	std::string lift, arg;
+
+	lift = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (lift.length() == 0) return;
+
+	expression.erase(0, lift.length() + 2);
+
+	arg = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (arg.length() == 0) return;
+	
+	expression.erase(0, arg.length() + 2);
+
+	if (lift.find_first_not_of("-0123456789") != std::string::npos) return;
+
+	lift_num = std::stoi(lift);
+
+	tempImage = latex.toImage(arg);
+	if (!tempImage.isEmpty())
+	{
+		tempImage.m_Baseline += lift_num;
+		if (lift_num < 0) tempImage.m_AdvanceHeight -= lift_num;
+		image.concat(tempImage);
+	}
+};
+
+void Handlers::rastText(Latex& latex, std::string& expression, Image& image, SubFunctionType textType)
+{
+	//? Maybe add another array of subfunction-like letters (i.e. {"\\alpha", NULL, letterCode})
+	
+	return;
+	Image tempImage;
+	Letter* letter;
+	std::string arg;
+
+	arg = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (arg.length() == 0)
+		return;
+
+	expression.erase(0, arg.length() + 2);
+
+	while (arg.length() > 0){
+		switch (textType)
+		{
+			case TEXT_CYR:
+				// Search for letter
+				// Assign letter from table to letter pointer
+				break;
+			case TEXT_GREEK:
+				// Search for letter
+				// Assign letter from table to letter pointer
+				break;
+		}
+		tempImage.rasterizeCharacter(letter->charCode, latex.getSelectedFont(), latex.getFontColor());
+		arg.erase(0, strlen(letter->character));
+	}
+
+	image.concat(tempImage);
+};
+
+void Handlers::rastSetFont(Latex& latex, std::string& expression, Image& image, SubFunctionType fontType)
+{
+	// get font type
+	// get subexpression
+	// set font type
+	// if open brace after font type is not present ('~' is present)
+		// rasterize the rest of expression
+	// else
+		// get subexpression between braces
+		// rasterize subexpression
+		// set previous font type
+	// if rasterized image is not empty
+		// concat with passed image
 };
