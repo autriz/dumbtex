@@ -44,11 +44,25 @@ extern "C" {
 #endif
 
 #define SFT_DOWNWARD_Y    0x01
-#define SFT_RENDER_IMAGE  0x02
 #define SFT_CATCH_MISSING 0x04
 
-/* Deprecated. Use SFT_RENDER_IMAGE instead (Only the name has changed). */
-#define SFT_CHAR_IMAGE 0x02
+typedef struct SFT 		    SFT;
+typedef struct SFT_Font     SFT_Font;
+typedef uint32_t 		    SFT_Glyph;
+typedef struct SFT_LMetrics SFT_LMetrics;
+typedef struct SFT_GMetrics SFT_GMetrics;
+typedef struct SFT_Kerning  SFT_Kerning;
+typedef struct SFT_Char     SFT_Char;
+
+struct SFT
+{
+	SFT_Font *font;
+	double xScale;
+	double yScale;
+	double xOffset;
+	double yOffset;
+	unsigned int flags;
+};
 
 struct SFT_Font {
 	const uint8_t *memory;
@@ -62,16 +76,29 @@ struct SFT_Font {
 	int_least16_t locaFormat;
 	uint_least16_t numLongHmtx;
 };
-typedef struct SFT_Font SFT_Font;
 
-struct SFT
+struct SFT_LMetrics
 {
-	SFT_Font *font;
-	double xScale;
-	double yScale;
-	double x;
-	double y;
-	unsigned int flags;
+	/* The distance from the baseline to the visual top of the text */
+	double ascender;
+	/* The distance from the baseline to the visual bottom of the text */
+	double descender;
+	/* The default amount of horizontal padding between consecutive lines */
+	double lineGap;
+};
+
+struct SFT_GMetrics
+{
+	/* How much the pen position should advance to the right after rendering the glyph */
+	double advanceWidth;
+	/* The offset that should be applied along the X axis from the pen position to the edge of the glyph image */
+	double leftSideBearing;
+	/* An offset along the Y axis relative to the pen position that should be applied when displaying the glyph */
+	int    yOffset;
+	/* The minimum width that an image needs such that the glyph can be properly rendered into it */
+	int    minWidth;
+	/* The minimum height that an image needs such that the glyph can be properly rendered into it */
+	int    minHeight;
 };
 
 struct SFT_Char
@@ -84,6 +111,14 @@ struct SFT_Char
 	int height;
 };
 
+struct SFT_Kerning
+{
+	/* An amount that should be added to the pen's X position in-between the two glyphs */
+	double xShift;
+	/* An amount that should be added to the pen's Y position in-between the two glyphs */
+	double yShift;
+};
+
 /* libschrift uses semantic versioning. */
 const char *sft_version(void);
 
@@ -91,9 +126,22 @@ SFT_Font *sft_loadmem(const void *mem, unsigned long size);
 SFT_Font *sft_loadfile(const char *filename);
 void sft_freefont(SFT_Font *font);
 
-int sft_linemetrics(const struct SFT *sft, double *ascent, double *descent, double *gap);
-int sft_kerning(const struct SFT *sft, unsigned long leftChar, unsigned long rightChar, double kerning[2]);
-int sft_char(const struct SFT *sft, unsigned long charCode, struct SFT_Char *chr);
+/*
+	@brief Calculates the typographic metrics neccessary for laying out multiple lines of text
+*/
+int sft_lmetrics(const SFT *sft, SFT_LMetrics *lmetrics);
+/* 
+	@brief Tells where to draw the next glyph with respect to the pen position, and how to update it after rendering the glyph 
+*/
+int sft_gmetrics(const SFT *sft, SFT_Glyph glyph, SFT_GMetrics *gmetrics);
+/* 
+	@brief Used to retrieve kerning information for a given pair of glyph ids
+*/
+int sft_kerning(const SFT *sft, SFT_Glyph leftGlyph, SFT_Glyph rightGlyph, SFT_Kerning* kerning);
+/*
+	@brief Render a glyph
+*/
+int sft_char(const SFT *sft, unsigned long charCode, SFT_Char *chr);
 
 #ifdef __cplusplus
 }
