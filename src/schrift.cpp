@@ -81,7 +81,7 @@ struct Buffer
 
 /* function declarations */
 /* generic utility functions */
-static void *reallocarray(void *optr, size_t nmemb, size_t size);
+void *reallocarray(void *optr, size_t nmemb, size_t size);
 static inline int fast_floor(double x);
 static inline int fast_ceil(double x);
 /* file loading */
@@ -113,7 +113,7 @@ static inline int8_t   geti8 (SFT_Font *font, unsigned long offset);
 static inline uint16_t getu16(SFT_Font *font, unsigned long offset);
 static inline int16_t  geti16(SFT_Font *font, unsigned long offset);
 static inline uint32_t getu32(SFT_Font *font, unsigned long offset);
-static int gettable(SFT_Font *font, const char tag[4], uint32_t *offset);
+static int gettable(SFT_Font *font, const char tag[4], uint_fast32_t *offset);
 /* codePoint -> glyph */
 static int cmap_fmt4(SFT_Font *font, unsigned long table, unsigned long charCode, SFT_Glyph *glyph);
 static int cmap_fmt6(SFT_Font *font, unsigned long table, unsigned long charCode, SFT_Glyph *glyph);
@@ -202,7 +202,7 @@ int
 sft_lmetrics(const SFT* sft, SFT_LMetrics* lmetrics)
 {
 	double factor;
-	uint32_t hhea;
+	uint_fast32_t hhea;
 	memset(lmetrics, 0, sizeof *lmetrics);
 	if (gettable(sft->font, "hhea", &hhea) < 0)
 		return -1;
@@ -404,7 +404,7 @@ sft_char(const SFT *sft, unsigned long charCode, SFT_Char *chr)
 /* OpenBSD's reallocarray() standard libary function.
  * A wrapper for realloc() that takes two size args like calloc().
  * Useful because it eliminates common integer overflow bugs. */
-static void *
+void *
 reallocarray(void *optr, size_t nmemb, size_t size)
 {
 	if ((nmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
@@ -490,7 +490,7 @@ unmap_file(SFT_Font *font)
 static int
 map_file(SFT_Font *font, const char *filename)
 {
-	stat info;
+	struct stat info;
 	int fd;
 	font->memory = MAP_FAILED;
 	font->size = 0;
@@ -520,7 +520,7 @@ unmap_file(SFT_Font *font)
 static int
 init_font(SFT_Font *font)
 {
-	uint32_t scalerType, head, hhea;
+	uint_fast32_t scalerType, head, hhea;
 
 	/* Check for a compatible scalerType (magic number). */
 	scalerType = getu32(font, 0);
@@ -785,7 +785,7 @@ getu32(SFT_Font *font, unsigned long offset)
 }
 
 static int
-gettable(SFT_Font *font, const char tag[4], uint32_t *offset)
+gettable(SFT_Font *font, const char tag[4], uint_fast32_t *offset)
 {
 	void *match;
 	unsigned int numTables;
@@ -979,7 +979,8 @@ glyph_id(SFT_Font *font, unsigned long charCode, SFT_Glyph* glyph)
 static int
 hor_metrics(SFT_Font *font, SFT_Glyph glyph, int *advanceWidth, int *leftSideBearing)
 {
-	uint32_t offset, boundary, hmtx;
+	uint32_t offset, boundary;
+	uint_fast32_t hmtx;
 	if (gettable(font, "hmtx", &hmtx) < 0)
 		return -1;
 	if (glyph < font->numLongHmtx) {
