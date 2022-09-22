@@ -412,7 +412,7 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 		printf("[Image::rasterizeCharacter] char: %c, x: %d, y: %d, width: %d, height: %d, advance: %f\n\n", charCode, c.x, c.y, c.width, c.height, c.advance);
 	#endif
 
-	Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), c.height, 4);
+	Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), (c.width == 0 && c.advance != 0) ? 1 : c.height, 4);
 	character.m_Baseline = std::abs(c.y - 1);
 	character.m_AdvanceHeight = c.height - character.m_Baseline;
 
