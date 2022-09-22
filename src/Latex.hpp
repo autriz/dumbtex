@@ -7,6 +7,15 @@
 #include <stack>
 #include <iostream>
 
+struct Scripts;
+
+enum ScriptType
+{
+    SUBSCRIPT = 1,
+    SUPSCRIPT,
+    BOTH
+};
+
 class Latex {
 
     public:
@@ -163,7 +172,7 @@ class Latex {
             @param left Delimeter that begin subexpression
             @param right Delimeter that end subexpression
             @param returnDelims If true, subexpression returns with left and right delimeters
-            @returns String, containing everything between left and right braces, or NULL if none found
+            @returns String, containing everything between left and right delimeters, or next char if none found
         */
         static std::string getSubExpression(std::string& expression, int from, const char left, const char right, bool returnDelims);
         
@@ -199,13 +208,11 @@ class Latex {
         */
         void prepExpression(std::string& expression);
 
-        void rastLimits(std::string& expression, Image& image);
-
         /*
-            @brief WIP
-            @returns Image
+            @brief Searches for subscript and/or superscript in expression
+            @returns Scripts struct, containing subscript and supscript strings
         */
-        Image texScripts(std::string expression, int at);
+        Scripts texScripts(std::string& expression, ScriptType which);
 
     public:
 
@@ -244,7 +251,12 @@ Color hexToRGBA(const int& hex, uint8_t alpha = 255);
 */
 Color hexToRGBA(const std::string& hex, uint8_t alpha = 255);
 
-/* Subject to change */
+struct Scripts
+{
+    std::string subScript;
+    std::string supScript;
+};
+
 enum SubFunctionType
 {
     NONE = -1,
@@ -311,6 +323,12 @@ struct Handlers
             @brief
         */
         static void rastText(Latex&, std::string&, Image&, SubFunctionType);
+
+        /*
+            @brief Subscript and superscript handler
+        */
+        static void rastScripts(Latex&, std::string&, Image&, SubFunctionType);
+
 };
 
 static Letter cyr_table[] = 

@@ -45,7 +45,7 @@ Image Latex::toImage(std::string& expression)
 
 	Image finalImage;
 
-	size_t i, j;
+	int i, j;
 	static bool isFirstIteration = false;
 	SubFunction subFunction;
 
@@ -61,7 +61,7 @@ Image Latex::toImage(std::string& expression)
 
 	while (expression.length() > 0)
 	{
-		for (i = 0; i < expression.length(); i++)
+		for (i = 0; i < expression.length(); ++i)
 		{
 			//if expression[i] == '{' and expression[i-1] != '\\' then
 			//find '}', check if '}' not escaped
@@ -72,7 +72,7 @@ Image Latex::toImage(std::string& expression)
 			//concat with finalImage
 			if (expression[i] == '_' || expression[i] == '^')
 			{
-				//rasterize sup/subscripts
+				Handlers::rastScripts(*this, expression, finalImage, NONE);
 				break;
 			}
 			else if (expression[i] == '{')
@@ -192,24 +192,36 @@ void Latex::prepExpression(std::string& expression)
 	// while ( )
 };
 
-Image Latex::texScripts(std::string expression, int at)
+Scripts Latex::texScripts(std::string& expression, ScriptType which)
 {
-	Image img;
-	return img;
-};
+	bool gotSub = false, gotSup = false;
+	std::string subScript, supScript;
 
-void rastLimits(std::string& expression, Image& image)
-{
-	//called if subscript or superscript is found
-	//if 0-th index of expression is subscript, then
-		//check if opening bracket is present on 1-st index
-		//if it is, rasterize expression between brackets on size lower than main expression
-		//else rasterize next character on size lower than main expression
-	//else if its sup(er)script
-		//check if opening bracket is present on 1-st index
-		//if it is, rasterize expression between brackets on size lower than main expression
-		//else rasterize next character on size lower than main expression
-	//remove rasterized sub/supscript and if 0-th index of expression again sub/supscript, do it again
+	while (expression.length() > 0)
+	{
+		printf("%d\n", expression.length());
+		if (expression[0] == '_' && (which == 1 || which == 3))
+		{
+			if (!gotSub)
+			{
+				expression.erase(0, 1);
+				gotSub = true;
+				subScript = Latex::getSubExpression(expression, 0, '{', '}', false);
+			}
+		}
+		else if (expression[0] == '^' && (which == 2 || which == 3))
+		{
+			if (!gotSup)
+			{
+				expression.erase(0, 1);
+				gotSup = true;
+				supScript = Latex::getSubExpression(expression, 0, '{', '}', false);
+			}
+		}
+		else
+			return {subScript, supScript};
+	}
+	return {subScript, supScript};
 };
 
 std::string Latex::getSubExpression(std::string& expression, int from, const char left, const char right, bool returnDelims)
@@ -217,7 +229,15 @@ std::string Latex::getSubExpression(std::string& expression, int from, const cha
 	PROFILE_SCOPE("Latex::getSubExpression");
 
 	unsigned first, last;
+	std::string result;
 	std::stack<char> brackets;
+
+	if (expression[from] != left) // if expression not starts from left delimeter
+	{
+		result = expression[0];
+		expression.erase(0, 1);
+		return result; //just return first char
+	}
 
 	first = expression.find(left, from); //find index of left delimeter
 	if (first > from) return NULL;
@@ -239,7 +259,10 @@ std::string Latex::getSubExpression(std::string& expression, int from, const cha
 	while (expression[last - 1] == '\\') //if delimeter is escaped
 		last = expression.find(right, last+1); //find right delimeter again
 
-	return returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
+	result = returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
+	expression.erase(0, returnDelims ? result.length() : result.length() + 2);
+
+	return result;
 };
 
 SubFunction Latex::getSubFunction(const std::string& expression, int at)
@@ -414,18 +437,10 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		std::string hex1, hex2, arg;
 
 		hex1 = Latex::getSubExpression(expression, 0, '{', '}', false);
-
-		if (hex1.length() == 0)
-			return;
-
-		expression.erase(0, hex1.length() + 2);
+		if (hex1.length() == 0) return;
 
 		hex2 = Latex::getSubExpression(expression, 0, '{', '}', false);
-
-		if (hex2.length() == 0)
-			return;
-
-		expression.erase(0, hex2.length() + 2);
+		if (hex2.length() == 0) return;
 
 		if (expression[0] == '~')
 		{
@@ -435,10 +450,9 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		else
 		{
 			arg = Latex::getSubExpression(expression, 0, '{', '}', false);
-			if (arg.length() == 0) 
-				return;
+			if (arg.length() == 0) return;
 
-			expression.erase(0, arg.length() + 2);
+			expression.erase(0, expression[0] == '{' ? arg.length() + 2 : arg.length());
 		}
 
 		tempImage = latex.toImage(arg);
@@ -453,10 +467,7 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		{
 			case COLOR_CUSTOM:
 				hex = Latex::getSubExpression(expression, 0, '{', '}', false);
-				if (hex.length() == 0) 
-					return;
-
-				expression.erase(0, hex.length() + 2);
+				if (hex.length() == 0) return;
 				break;
 			case COLOR_RED:
 				hex = "ff0000";
@@ -469,18 +480,14 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		{
 			arg = expression.substr(1);
 			expression.erase(0);
-			if (arg.length() == 0)
-				return;
+			if (arg.length() == 0) return;
 
 			tempImage = latex.toImage(arg);
 		}
 		else //color only text in brackets
 		{
 			arg = Latex::getSubExpression(expression, 0, '{', '}', false);
-			if (arg.length() == 0) 
-				return;
-
-			expression.erase(0, arg.length() + 2);
+			if (arg.length() == 0) return;
 
 			tempImage = latex.toImage(arg);
 
@@ -501,12 +508,8 @@ void Handlers::rastRaise(Latex& latex, std::string& expression, Image& image, Su
 	lift = Latex::getSubExpression(expression, 0, '{', '}', false);
 	if (lift.length() == 0) return;
 
-	expression.erase(0, lift.length() + 2);
-
 	arg = Latex::getSubExpression(expression, 0, '{', '}', false);
 	if (arg.length() == 0) return;
-	
-	expression.erase(0, arg.length() + 2);
 
 	if (lift.find_first_not_of("-0123456789") != std::string::npos) return;
 
@@ -534,9 +537,7 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 	if (arg.length() == 0)
 		return;
 
-	expression.erase(0, arg.length() + 2);
-
-	while (arg.length() > 0){
+	for (int i = 0; i < arg.length(); ++i){
 		switch (textType)
 		{
 			case TEXT_CYR:
@@ -549,7 +550,6 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 				break;
 		}
 		tempImage.rasterizeCharacter(letter->charCode, latex.getSelectedFont(), latex.getFontColor());
-		arg.erase(0, strlen(letter->character));
 	}
 
 	image.concat(tempImage);
@@ -568,4 +568,55 @@ void Handlers::rastSetFont(Latex& latex, std::string& expression, Image& image, 
 		// set previous font type
 	// if rasterized image is not empty
 		// concat with passed image
+};
+
+void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	Image subImg, supImg;
+	Details subDetails, supDetails;
+	int newWidth, newHeight, newBaseline;
+	bool isSub, isSup;
+	Scripts scripts;
+	Font& font = latex.getSelectedFont();
+
+	if (expression.length() == 0)
+		return;
+
+	scripts = latex.texScripts(expression, ScriptType::BOTH);
+	
+	if (scripts.subScript.length() != 0)
+	{
+		isSub = true;
+		font.setSize(font.m_SFT.xScale - 5);
+		subImg = latex.toImage(scripts.subScript); // implement proper size changer
+		font.setSize(font.m_SFT.xScale + 5);
+	}
+	if (scripts.supScript.length() != 0)
+	{
+		isSup = true;
+		font.setSize(font.m_SFT.xScale - 5);
+		supImg = latex.toImage(scripts.supScript);
+		font.setSize(font.m_SFT.xScale + 5);
+	}
+
+	if (!isSub && !isSup)
+		return;
+
+	if (isSub)
+		subDetails = subImg.getDetails();
+
+	if (isSup)
+		supDetails = supImg.getDetails();
+
+	newWidth = subDetails.width > supDetails.width ? subDetails.width : supDetails.width;
+	newHeight = (image.m_Height - image.m_AdvanceHeight) + subDetails.height + supDetails.height;
+
+	Image tempImg(newWidth, newHeight, 4);
+	tempImg.m_Baseline = newHeight - subDetails.height;
+	if (subDetails.height > 0) tempImg.m_AdvanceHeight += subDetails.height;
+
+	tempImg.overlay(supImg, 0, 0);
+	tempImg.overlay(subImg, 0, newHeight - subDetails.height);
+
+	image.concat(tempImg);
 };
