@@ -2,13 +2,14 @@
 
 #define BYTE_BOUND(value) value < 0 ? 0 : (value > 255 ? 255 : value)
 
+# define M_PI 3.14159265358979323846 
+
 #include "schrift.h"
 
 #include "Profiler.hpp"
 
 #include <vector>
 #include <string>
-
 #include <functional>
 
 enum ImageType { UNKNOWN = -2, NO_TYPE = -1, PNG, JPG, BMP, TGA };
@@ -80,13 +81,6 @@ class Image {
 
 		/* Blank constructor */
 		Image();
-		
-		/* 
-			@brief Gets image from file 
-			@param filename File path
-			@param channelForce Forced number of color channels (default - 0, that is image's color channels will be applied)
-		*/
-		Image(const char* filename, int channelForce = 0);
 
 		/* 
 			@brief Image creation constructor
@@ -101,14 +95,6 @@ class Image {
 
 		/* Deconstructor */
 		~Image();
-
-		/* 
-			@brief Read image from file 
-			@param filename path to file
-			@param channelForce forced number of channels (default - 0, that is it won't be forced)
-			@return true if file read successfully, false if not
-		*/
-		bool read(const char* filename, int channelForce = 0);
 		
 		/* 
 			@brief Write image to file 
@@ -146,6 +132,13 @@ class Image {
 			@param axis Axis to flip by, X or Y
 		*/
 		void flip(AXIS axis);
+
+		void bilInterp(float oldRow, float oldCol, int *row, int *col);
+
+		/*
+			@brief Rotate image by arbitrary degree. For now works only 90-180-270-360 degrees.
+		*/
+		void rotate(double degrees);
 
 		/*
 			@brief Overlays image onto image
