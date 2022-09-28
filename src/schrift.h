@@ -104,7 +104,7 @@ struct SFT_GMetrics
 struct SFT_Char
 {
 	uint8_t* image;
-	double advance;
+	int advance;
 	int x;
 	int y;
 	int width;

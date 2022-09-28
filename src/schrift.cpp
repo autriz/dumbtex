@@ -348,8 +348,6 @@ sft_char(const SFT *sft, unsigned long charCode, SFT_Char *chr)
 	if (!outline)
 		return 0;
 
-
-
 	/* Read the bounding box from the font file verbatim. */
 	if (sft->font->size < (unsigned long) outline + 10)
 		return -1;
@@ -359,7 +357,6 @@ sft_char(const SFT *sft, unsigned long charCode, SFT_Char *chr)
 	y2 = geti16(sft->font, outline + 8);
 	if (x2 <= x1 || y2 <= y1)
 		return -1;
-
 
 	/* Shift the transformation along the X axis such that
 	 * x1 and leftSideBearing line up. Derivation:
