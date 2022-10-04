@@ -8,9 +8,9 @@
 
 #include "Profiler.hpp"
 
+#include <functional>
 #include <vector>
 #include <string>
-#include <functional>
 
 enum ImageType { UNKNOWN = -2, NO_TYPE = -1, PNG, JPG, BMP, TGA };
 
@@ -133,8 +133,6 @@ class Image {
 		*/
 		void flip(AXIS axis);
 
-		void bilInterp(float oldRow, float oldCol, int *row, int *col);
-
 		/*
 			@brief Rotate image by arbitrary degree. For now works only 90-180-270-360 degrees.
 		*/
@@ -195,7 +193,11 @@ class Image {
 			@param font Font that will be used
 			@param color Color struct with RGBA parameters (0-255)
 		*/
-		void rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color);
+		void rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color = {255, 255, 255, 255});
+
+		void drawLine(int x0, int y0, int x1, int y1, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
+
+		void drawLine(int x0, int y0, int x1, int y1, const Color& color = {255, 255, 255, 255});
 
 		/*
 			@brief Crops image
@@ -251,6 +253,10 @@ class Image {
 			@returns Image of two concatenated images
 		*/
 		static Image concat(const Image& destination, const Image& source, ImagePosition position = ImagePosition::RIGHT);
+
+		static Image scaleUp(const Image& source, int times);
+
+		static Image scaleDown(const Image& source, int times);
 
 		void operator=(const Image& origin);
 

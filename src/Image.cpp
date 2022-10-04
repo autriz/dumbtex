@@ -93,15 +93,12 @@ bool Image::write(const char *filename, ImageType type)
 		case TGA:
 			success = stbi_write_tga(filename, m_Width, m_Height, m_Channels, m_Data);
 			break;
+		default:
+			success = 0;
+			break;
 	}
 
-	if (!success)
-	{
-		// printf("\e[31;1m Failed to write \e[36m%s\e[0m, %d, %d, %d, %zu\n", filename, m_Width, m_Height, m_Channels, m_Size);
-		return false;
-	}
-	
-	return true;
+	return success;
 }
 
 ImageType Image::getFileType(const char *filename)
@@ -138,9 +135,9 @@ bool Image::isEmpty() const
 void Image::colorMask(float r, float g, float b)
 {
 	if (m_Channels < 3)
-		printf("\e[31m[ERROR] Color mask requires at least 3 channels, but this image has %d channels\e[0m\n", m_Channels);
+		printf("[Image::colorMask] \e[31m[ERROR] Color mask requires at least 3 channels, but this image has %d channels\e[0m\n", m_Channels);
 	else
-		for (int i = 0; i < m_Size; i += m_Channels)
+		for (size_t i = 0; i < m_Size; i += m_Channels)
 		{
 			m_Data[i] *= r;
 			m_Data[i + 1] *= g;
@@ -152,7 +149,7 @@ void Image::gradient(const Color& startColor, const Color& stopColor)
 {
 	uint8_t r, g, b;
 	uint8_t* px;
-	float n, alpha;
+	float n;
 
 	for (int x = 0; x < m_Width; ++x)
 	{
@@ -204,98 +201,9 @@ void Image::flip(AXIS axis)
 			}
 }
 
-void Image::bilInterp(float oldRow, float oldCol, int *row, int *col)
-{
-	// // The Q values represent the 4 pixels nearest the original pixel.
-	// // The result values are averages of the Q values.
-	// // P is the NEW intensity value that is returned.
-
-	// double Q11, Q12, Q21, Q22, P, result1, result2 = 0.0;
-	// int R1, R2, C1, C2 = 0;
-
-	// // Ex:
-	// // oldRow,oldCol = 180.6,60.4
-	// // R1,C1 = 180,60
-	// // R2,C2 = 181,61
-	// // We need to cast to int since
-	// // these are actually pixel coordinates
-	
-	// R1 = static_cast<int>(floor(oldRow));
-	// R2 = static_cast<int>(ceil(oldRow));
-	// C1 = static_cast<int>(floor(oldCol));
-	// C2 = static_cast<int>(ceil(oldCol));
-
-	// // If the R,C (row, column) values are outside of the old image after,
-	// // applying the rotation equations, then we set them to a default
-	// // intensity, otherwise we get the pixel's neighbouring 4 values.
-	// // 
-	// // Imagine we rotate 45 degrees on a rectangular image
-	// // and do the min row,col shifting in the inverse 
-	// // mapping function, then we'll have an image where:
-	// //		new image width > old image width
-	// //		new image height < old image height
-	// // So some value in the new image will need to be set to default
-	// // after rotation.
-
-	// if (((R1 < 0) || (!(R1 < m_Height))) || 
-	// 	((C1 < 0) || (!(C1 < m_Width))))
-	// 	Q11 = DEFAULTINTENSITY;
-	// else
-	// 	Q11 = *(oldArray[R1][C1]);
-	
-	// if (((R1 < 0) || (!(R1 < m_Height))) ||
-	// 	((C2 < 0) || (!(C2 < m_Width))))
-	// 	Q12 = DEFAULTINTENSITY;
-	// else
-	// 	Q12 = *(oldArray[R1][C2]);
-
-	// if (((R2 < 0) || (!(R2 < m_Height))) ||
-	// 	((C1 < 0) || (!(C1 < m_Width))))
-	// 	Q21 = DEFAULTINTENSITY; 
-	// else
-	// 	Q21 = *(oldArray[R2][C1]);
-
-	// if (((R2 < 0) || (!(R2 < m_Height))) ||
-	// 	((C2 < 0) || (!(C2 < m_Width))))
-	// 	Q22 = DEFAULTINTENSITY;
-	// else
-	// 	Q22 = *(oldArray[R2][C2]);
-
-	// // Now we will do the actual bilinear interpolation part!
-	// // We should check for division by 0 too!
-
-	// if ((R2 - R1) == 0)
-	// {
-	// 	result1 = 0.0;
-	// 	result2 = 0.0;
-	// }
-	// else
-	// {	
-	// 	// Calculate weightings
-	// 	result1 = ((R2 - oldRow)/(R2 - R1))*Q11 
-	// 		+ ((oldRow - R1)/(R2 - R1))*Q21;
-	// 	result2 = ((R2 - oldRow)/(R2 - R1))*Q12 
-	// 		+ ((oldRow - R1)/(R2 - R1))*Q22;
-	// }
-
-	// if ((C2 - C1) == 0)
-	// {
-	// 	P = 0.0;
-	// }
-	// else
-	// {
-	// 	P = ((C2 - oldCol)/(C2 - C1))*result1
-	// 	+ ((oldCol - C1)/(C2 - C1))*result2;
-	// }
-
-	// // Assign the new array at r,c the interpolated intensity!
-	// *(rotatedArray[row][col]) = P;
-}
-
 void Image::rotate(double degrees)
 {
 	PROFILE_SCOPE("Image::rotate");
-	// sorta works with 90-180-270-360 degrees
 	//!Non-orthogonal rotation results in "holes" in image
 	// implement image resizing for rotation
 	// for example, rotate 4 edge pixels (0,0) (1,0) (0,1) (1,1) to degrees 
@@ -304,32 +212,44 @@ void Image::rotate(double degrees)
 	if ((degrees < 0.001f && degrees > -0.001f) || degrees > 359.999f) // literally wont move
 		return;
 
+	#ifdef DEBUG
+		printf("[Image::rotate] degrees = %lf\n", degrees);
+	#endif
+
 	if (degrees < -0.001f)
 		degrees += 360.0f;
 
-	auto roundoff = [](double value, unsigned char precision)->double
+	auto roundoff = [](double value, unsigned char precision) -> double
 	{
 		double pow_10 = std::pow(10.0f, (double)precision);
 		return std::round(value * pow_10) / pow_10;
 	};
 
-	double x0 = (double)(m_Width / 2);
-	double y0 = (double)(m_Height / 2);
-	double tempX = 0.0f;
-	double tempY = 0.0f;
+	uint8_t *dstPx, *srcPx;
+
+	#ifdef DEBUG
+		printf("[Image::rotate] Scale up image by 2\n");
+	#endif
+
+	Image scaledImage = Image::scaleUp(*this, 2);
+	Image rotatedImage(scaledImage.m_Width, scaledImage.m_Height, scaledImage.m_Channels);
+	
+	double x0 = (double)(scaledImage.m_Width / 2);
+	double y0 = (double)(scaledImage.m_Height / 2);
+
 	double rad = degrees * ((std::atan(1) * 4) / 180);
 	double s = roundoff(std::sin(rad * 1.0f), 6);
 	double c = roundoff(std::cos(rad * 1.0f), 6);
 
-	uint8_t *dstPx, *srcPx;
-	Image rotatedImg(m_Width, m_Height, m_Channels);
-
-	printf("%f, %f\n", s, c);	
-	for (int y = 0; y < m_Height; ++y)
+	#ifdef DEBUG
+		printf("[Image::rotate] X center = %lf, Y center = %lf, cosine = %lf, sine = %lf\n", x0, y0, c, s);
+	#endif
+	
+	for (int y = 0; y < scaledImage.m_Height; ++y)
 	{
 		double y1 = (double)y - y0;
 
-		for(int x = 0; x < m_Width; ++x)
+		for(int x = 0; x < scaledImage.m_Width; ++x)
 		{
 				//slices off first row and first column
 				double x1 = (double)x - x0;
@@ -337,24 +257,21 @@ void Image::rotate(double degrees)
 				double x2 = roundoff(((c*x1) - (s*y1)) + x0, 1);
 				double y2 = roundoff(((s*x1) + (c*y1)) + y0, 1);
 
-				tempX = x2;
-				tempY = y2;
-
-				//use bilinear interpolation to fix missing pixels
-				//or nearest neighbor interpolation with rounding towards 0 (flooring)
-
-				if ((int)x2 >= 0 && (int)x2 < rotatedImg.m_Width && (int)y2 >= 0 && (int)y2 < rotatedImg.m_Height)
+				if ((int)x2 >= 0 && (int)x2 < rotatedImage.m_Width && (int)y2 >= 0 && (int)y2 < rotatedImage.m_Height)
 				{
-					dstPx = &rotatedImg.m_Data[((int)x2 + (int)y2 * rotatedImg.m_Width) * m_Channels];
-					srcPx = &m_Data[((int)x + (int)y * m_Width) * m_Channels];
+					dstPx = &rotatedImage.m_Data[((int)x2 + (int)y2 * rotatedImage.m_Width) * rotatedImage.m_Channels];
+					srcPx = &scaledImage.m_Data[((int)x + (int)y * scaledImage.m_Width) * scaledImage.m_Channels];
 
 					memcpy(dstPx, srcPx, m_Channels);
 				}
 		}
 	}
 
-	*this = rotatedImg;
+	#ifdef DEBUG
+		printf("[Image::rotate] Scale down image by 2\n");
+	#endif
 
+	*this = Image::scaleDown(rotatedImage, 2);
 }
 
 void Image::overlay(const Image &source, int x, int y)
@@ -363,27 +280,33 @@ void Image::overlay(const Image &source, int x, int y)
 	//? Instead of iteration through each color, I could just smash row with memcpy()
 	PROFILE_SCOPE("Image::overlay");
 	#ifdef DEBUG
-		printf("[Image::overlay] x: %d, y: %d\n", x, y);
+		printf("[Image::overlay] x = %d, y = %d\n", x, y);
 	#endif
 
 	uint8_t *srcPx;
 	uint8_t *dstPx;
+	int dy, dx;
 
 	for (int sy = 0; sy < source.m_Height; ++sy)
 	{
-		if (sy + y < 0)
+		dy = sy + y;
+		
+		if (dy < 0)
 			continue;
-		else if (sy + y >= m_Height)
+		else if (dy >= m_Height)
 			break;
+
 		for (int sx = 0; sx < source.m_Width; ++sx)
 		{
-			if (sx + x < 0)
+			dx = sx + x;
+
+			if (dx < 0)
 				continue;
-			else if (sx + x >= m_Width)
+			else if (dx >= m_Width)
 				break;
 
 			srcPx = &source.m_Data[(sx + sy * source.m_Width) * source.m_Channels];
-			dstPx = &m_Data[((sx + x) + (sy + y) * m_Width) * m_Channels];
+			dstPx = &m_Data[(dx + dy * m_Width) * m_Channels];
 
 			float srcAlpha = source.m_Channels < 4 ? 1 : srcPx[3] / 255.f;
 			float dstAlpha = m_Channels < 4 ? 1 : dstPx[3] / 255.f;
@@ -417,6 +340,12 @@ void Image::overlay(const Image &source, int x, int y)
 
 void Image::overlayText(const std::string& txt, const Font& font, int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
+	PROFILE_SCOPE("Image::overlayText");
+
+	#ifdef DEBUG
+		printf("[Image::overlayText] text = %s, x = %d, y = %d, RGBA = {%d, %d, %d, %d}\n", txt.c_str(), x, y, r, g, b, a);
+	#endif
+
 	size_t len = txt.length();
 	SFT_Char c;
 	int32_t dx, dy;
@@ -432,6 +361,10 @@ void Image::overlayText(const std::string& txt, const Font& font, int x, int y, 
 
 			continue;
 		}
+
+		#ifdef DEBUG
+			printf("[Image::overlayText] overlaying \"%c\"...", txt[i]);
+		#endif
 
 		for (uint16_t sy = 0;sy < c.height;++sy) 
 		{
@@ -493,7 +426,11 @@ void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, u
 {
 	PROFILE_SCOPE("Image::rasterizeText");
 
-	size_t len = txt.length();
+	#ifdef DEBUG
+		printf("[Image::rasterizeText] text = %s, RGBA = {%d, %d, %d, %d}\n", txt.c_str(), r, g, b, a);
+	#endif
+
+	int len = txt.length();
 	SFT_Char c;
 
 	if (&font.m_SFT == NULL) return;
@@ -508,7 +445,8 @@ void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, u
 		};
 
 		#ifdef DEBUG
-			printf("[Image::rasterizeText] char: %c, x: %d, y: %d, width: %d, height: %d, advance: %d\n", txt[i], c.x, c.y, c.width, c.height, c.advance);
+			printf("[Image::rasterizeText] rasterizing \"%c\"...\n", txt[i]);
+			printf("[Image::rasterizeText] x = %d, y = %d, width = %d, height = %d, advance = %d\n", c.x, c.y, c.width, c.height, c.advance);
 		#endif
 
 		Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), c.height, 4);
@@ -518,7 +456,12 @@ void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, u
 		handleRaster(font, character, c, r, g, b, a);
 		
 		if (!character.isEmpty())
-			concat(character);
+		{
+			if (!this->isEmpty())
+				concat(character);
+			else
+				*this = character;
+		}
 
 		free(c.image); //free anyway
 	}
@@ -533,19 +476,23 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 {
 	PROFILE_SCOPE("Image::rasterizeCharacter");
 
+	#ifdef DEBUG
+		printf("[Image::rasterizeCharacter] charCode = %c, RGBA = {%d, %d, %d, %d}\n", (int)charCode, r, g, b, a);
+	#endif
+
 	SFT_Char c;
 
 	if (&font.m_SFT == NULL) return;
 
 	if (sft_char(&font.m_SFT, charCode, &c) != 0)
 	{
-		printf("\e[31m[ERROR] Font is missing character '%c'\e[0m\n", charCode);
+		printf("\e[31m[ERROR] Font is missing character '%c'\e[0m\n", (int)charCode);
 
 		return;
 	}
 
 	#ifdef DEBUG
-		printf("[Image::rasterizeCharacter] char: %c, x: %d, y: %d, width: %d, height: %d, advance: %d\n\n", charCode, c.x, c.y, c.width, c.height, c.advance);
+		printf("[Image::rasterizeCharacter] x: %d, y: %d, width: %d, height: %d, advance: %d\n", c.x, c.y, c.width, c.height, c.advance);
 	#endif
 
 	Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), (c.width == 0 && c.advance != 0) ? 1 : c.height, 4);
@@ -558,14 +505,57 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 	handleRaster(font, character, c, r, g, b, a);
 	
 	if (!character.isEmpty())
-		concat(character);
+	{
+		if (!this->isEmpty())
+			concat(character);
+		else
+			*this = character;
+	}
 
 	free(c.image); //free anyway
 }
 
-void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color = {255, 255, 255, 255})
+void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color)
 {
 	rasterizeCharacter(charCode, font, color.r, color.g, color.b, color.a);
+}
+
+void Image::drawLine(int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+	int dx, dy, p, x, y;
+	uint8_t *srcPx;
+	uint8_t color[4] = {r, g, b, a};
+ 
+	dx=x1-x0;
+	dy=y1-y0;
+	
+	x=x0;
+	y=y0;
+	
+	p=2*dy-dx;
+	
+	while(x<x1)
+	{
+		srcPx = &m_Data[(x + y * m_Width) * m_Channels];
+
+		for (int chnl = 0; chnl < m_Channels; chnl++) // putpixel(x,y,7);
+			srcPx[chnl] = color[chnl];
+
+		if(p>=0)
+		{
+			y=y+1;
+			p=p+2*dy-2*dx;
+		}
+		else
+			p=p+2*dy;
+
+		x=x+1;
+	}
+}
+
+void Image::drawLine(int x0, int y0, int x1, int y1, const Color& color)
+{
+	drawLine(x0, y0, x1, y1, color.r, color.g, color.b, color.a);
 }
 
 void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
@@ -576,6 +566,7 @@ void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, u
 	uint8_t *dstPx;
 	uint8_t srcPx;
 	uint8_t color[4] = {r, g, b, a};
+	float srcAlpha, dstAlpha, outAlpha;
 
 	for (int32_t sy = 0; sy < c.height; ++sy)
 	{
@@ -600,14 +591,14 @@ void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, u
 
 			if (srcPx != 0)
 			{
-				float srcAlpha = (srcPx / 255.f) * (a / 255.f);
-				float dstAlpha = chr.m_Channels < 4 ? 1 : dstPx[3] / 255.f;
+				srcAlpha = (srcPx / 255.f) * (a / 255.f);
+				dstAlpha = chr.m_Channels < 4 ? 1 : dstPx[3] / 255.f;
 
 				if (srcAlpha > .99 && dstAlpha > .99)
 					memcpy(dstPx, color, chr.m_Channels);
 				else
 				{
-					float outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
+					outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
 
 					if (outAlpha < .01)
 						memset(dstPx, 0, chr.m_Channels);
@@ -818,6 +809,77 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 
 	return newImage;
 };
+
+Image Image::scaleUp(const Image& source, int times)
+{
+	PROFILE_SCOPE("Image::scaleUp");
+
+	Image scaledImage(source.m_Width * times, source.m_Height * times, source.m_Channels);
+	uint8_t *dstPx, *srcPx;
+
+	for (int y = 0; y < source.m_Height; ++y)
+	{
+		for (int x = 0; x < source.m_Width; ++x)
+		{
+			srcPx = &source.m_Data[(x + y * source.m_Width) * source.m_Channels];
+
+			for (int scaledY = 0; scaledY < times; ++scaledY)
+				for (int scaledX = 0; scaledX < times; ++scaledX)
+				{
+					dstPx = &scaledImage.m_Data[((times * x + scaledX) + (times * y + scaledY) * scaledImage.m_Width) * scaledImage.m_Channels];
+					memcpy(dstPx, srcPx, source.m_Channels);
+				}
+		}
+	}
+
+	return scaledImage;
+}
+
+Image Image::scaleDown(const Image& source, int times)
+{
+	PROFILE_SCOPE("Image::scaleDown");
+
+	Image scaledImage(source.m_Width / times, source.m_Height / times, source.m_Channels);
+	uint8_t *dstPx, *srcPx;
+	int r, g, b, a, denom;
+	denom = times*times;
+
+	for (int y = 0; y < scaledImage.m_Height; ++y)
+	{
+		for (int x = 0; x < scaledImage.m_Width; ++x)
+		{
+			dstPx = &scaledImage.m_Data[(x + y * scaledImage.m_Width) * scaledImage.m_Channels];
+
+			for (int scaledY = 0; scaledY < times; ++scaledY)
+				for (int scaledX = 0; scaledX < times; ++scaledX)
+				{
+					srcPx = &source.m_Data[((times * x + scaledX) + (times * y + scaledY) * source.m_Width) * source.m_Channels];
+					//color is messed up
+					//get dominant color and use it
+
+					r += srcPx[0];
+					g += srcPx[1];
+					b += srcPx[2];
+					a += scaledImage.m_Channels > 3 ? srcPx[3] : 0;
+				}
+			
+			r /= denom;
+			g /= denom;
+			b /= denom;
+			a /= denom;
+
+			uint8_t dstColor[4] = {(uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a};
+			if (denom == 0)
+				memset(dstPx, 0, source.m_Channels);
+			else
+				memcpy(dstPx, dstColor, source.m_Channels);
+			r = g = b = a = 0;
+			denom = times*times;
+		}
+	}
+
+	return scaledImage;
+}
 
 void Image::operator=(const Image& origin) {
 	if (origin.isEmpty()) 
