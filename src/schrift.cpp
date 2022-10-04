@@ -115,8 +115,8 @@ static inline int16_t  geti16(SFT_Font *font, unsigned long offset);
 static inline uint32_t getu32(SFT_Font *font, unsigned long offset);
 static int gettable(SFT_Font *font, const char tag[4], uint_fast32_t *offset);
 /* codePoint -> glyph */
-static int cmap_fmt4(SFT_Font *font, unsigned long table, unsigned long charCode, SFT_Glyph *glyph);
-static int cmap_fmt6(SFT_Font *font, unsigned long table, unsigned long charCode, SFT_Glyph *glyph);
+static int cmap_fmt4(SFT_Font *font, uint_fast32_t table, unsigned long charCode, SFT_Glyph *glyph);
+static int cmap_fmt6(SFT_Font *font, uint_fast32_t table, unsigned long charCode, SFT_Glyph *glyph);
 static int glyph_id(SFT_Font *font, unsigned long charCode, SFT_Glyph *glyph);
 /* glyph -> hmtx */
 static int hor_metrics(SFT_Font *font, SFT_Glyph glyph, int *advanceWidth, int *leftSideBearing);
