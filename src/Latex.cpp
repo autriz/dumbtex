@@ -44,8 +44,7 @@ Image Latex::toImage(std::string& expression)
 	// Font font(p_NormalFont, 50); //Should be initialized when rasterization is needed
 
 	Image finalImage;
-
-	int i, j;
+	size_t i, j;
 	static bool isFirstIteration = false;
 	SubFunction subFunction;
 
@@ -70,6 +69,11 @@ Image Latex::toImage(std::string& expression)
 			//remove '{' and '}'
 			//parse it to toImage() again
 			//concat with finalImage
+
+			#ifdef DEBUG
+				if (i != 0) printf("[Latex::toImage] expression: %s\n", expression.c_str());
+			#endif
+
 			if (expression[i] == '_' || expression[i] == '^')
 			{
 				Handlers::rastScripts(*this, expression, finalImage, NONE);
@@ -77,17 +81,7 @@ Image Latex::toImage(std::string& expression)
 			}
 			else if (expression[i] == '{')
 			{
-				size_t rightBracketIndex;
-				std::string subexpression;
-
-				if ((rightBracketIndex = expression.find_last_of('}', i)) == std::string::npos || (expression[rightBracketIndex - 1] == '\\'))
-				{
-					expression.push_back('}');
-					rightBracketIndex = expression.length() - 1;
-				}
-
-				subexpression = expression.substr(i + 1, rightBracketIndex - i - 2);
-				expression.erase(i, subexpression.length() + 3);
+				std::string subexpression = Latex::getSubExpression(expression, 0, '{', '}', false);
 
 				if (expression.length() <= 0)
 				{
@@ -98,6 +92,7 @@ Image Latex::toImage(std::string& expression)
 				{
 					Image tempImage = toImage(subexpression);
 					finalImage.concat(tempImage);
+					break;
 				}
 			}
 			else if (expression[i] == '\\')
@@ -134,21 +129,16 @@ Image Latex::toImage(std::string& expression)
 		}
 
 		i = 0;
-
-		#ifdef DEBUG
-			printf("[Latex::toImage] expression: %s\n", expression.c_str());
-		#endif
 	}
 
-	return finalImage.isEmpty() ? NULL : finalImage;
+	return finalImage;
 };
 
 void Latex::prepExpression(std::string& expression)
 {
 	PROFILE_SCOPE("Latex::prepExpression");
 
-	if (expression.length() == 0)
-		return;
+	if (expression.length() == 0) return;
 
 	const char* comment = "%%";
 	std::stack<char> brackets;
@@ -170,20 +160,22 @@ void Latex::prepExpression(std::string& expression)
 	}
 
 	//Fix unbalanced brackets
-	for (int i = 0; i < expression.length(); i++)
+	for (size_t i = 0; i < expression.length(); i++)
 	{
 		if (expression[i] == '{') // found open bracket
 			brackets.push(expression[i]); // push it to stack
 
 		if (expression[i] == '}') // found close bracket
+		{
 			if (brackets.size() > 0) // if stack isn't empty
 				brackets.pop(); // remove open bracket from stack
 			else
 				expression.erase(i, 1); // erase unfixed close bracket
+		}
 	}
 
 	if (!brackets.empty())
-		for (int i = 0; i < brackets.size(); i++)
+		for (size_t i = 0; i < brackets.size(); i++)
 			expression.append("}"); //add close bracket for every unfixed open bracket
 
 	//Erase spaces
@@ -194,12 +186,13 @@ void Latex::prepExpression(std::string& expression)
 
 Scripts Latex::texScripts(std::string& expression, ScriptType which)
 {
+	PROFILE_SCOPE("Latex::texScripts");
+
 	bool gotSub = false, gotSup = false;
 	std::string subScript, supScript;
 
 	while (expression.length() > 0)
 	{
-		printf("%d\n", expression.length());
 		if (expression[0] == '_' && (which == 1 || which == 3))
 		{
 			if (!gotSub)
@@ -221,10 +214,11 @@ Scripts Latex::texScripts(std::string& expression, ScriptType which)
 		else
 			return {subScript, supScript};
 	}
+
 	return {subScript, supScript};
 };
 
-std::string Latex::getSubExpression(std::string& expression, int from, const char left, const char right, bool returnDelims)
+std::string Latex::getSubExpression(std::string& expression, unsigned from, const char left, const char right, bool returnDelims)
 {
 	PROFILE_SCOPE("Latex::getSubExpression");
 
@@ -234,19 +228,21 @@ std::string Latex::getSubExpression(std::string& expression, int from, const cha
 
 	if (expression[from] != left) // if expression not starts from left delimeter
 	{
-		result = expression[0];
-		expression.erase(0, 1);
+		result = expression[from];
+		expression.erase(from, 1);
 		return result; //just return first char
 	}
 
 	first = expression.find(left, from); //find index of left delimeter
 	if (first > from) return NULL;
 
-	for (int i = 0; i < expression.length(); i++) //find index of right delimeter
+	for (size_t i = 0; i < expression.length(); i++) //find index of right delimeter
 	{
 		if (expression[i] == left)
 			brackets.push(expression[i]);
+
 		if (expression[i] == right)
+		{
 			if (brackets.size() > 1)
 				brackets.pop();
 			else
@@ -254,6 +250,7 @@ std::string Latex::getSubExpression(std::string& expression, int from, const cha
 				last = i;
 				break;
 			}
+		}
 	}
 
 	while (expression[last - 1] == '\\') //if delimeter is escaped
@@ -265,7 +262,7 @@ std::string Latex::getSubExpression(std::string& expression, int from, const cha
 	return result;
 };
 
-SubFunction Latex::getSubFunction(const std::string& expression, int at)
+SubFunction Latex::getSubFunction(const std::string& expression, size_t at)
 {
 	PROFILE_SCOPE("Latex::getSubFunction");
 
@@ -278,6 +275,7 @@ SubFunction Latex::getSubFunction(const std::string& expression, int at)
 		if (match != std::string::npos && match == at) //if matches
 			return subfunctions[i];
 	};
+
 	return subfunctions[i]; //if not, should return NULL defined subfunction (dummy)
 }; 
 
@@ -421,11 +419,14 @@ Color hexToRGBA(const int& hex, uint8_t alpha)
 
 void Handlers::rastNewline(Latex& latex, std::string& expression, Image& image, SubFunctionType arg1)
 {
+	if (image.isEmpty()) return;
+
 	image.concat(latex.toImage(expression), ImagePosition::BOTTOM);
 };
 
 void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, SubFunctionType colorType)
 {
+	PROFILE_SCOPE("Handlers::rastColor");
 
 	Image tempImage;
 
@@ -451,8 +452,6 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		{
 			arg = Latex::getSubExpression(expression, 0, '{', '}', false);
 			if (arg.length() == 0) return;
-
-			expression.erase(0, expression[0] == '{' ? arg.length() + 2 : arg.length());
 		}
 
 		tempImage = latex.toImage(arg);
@@ -472,6 +471,20 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 			case COLOR_RED:
 				hex = "ff0000";
 				break;
+			case COLOR_GREEN:
+				hex = "00ff00";
+				break;
+			case COLOR_BLUE:
+				hex = "0000ff";
+				break;
+			case COLOR_BLACK:
+				hex = "000000";
+				break;
+			case COLOR_WHITE:
+				hex = "ffffff";
+				break;
+			default:
+				break;
 		}
 		
 		latex.setFontColor(hexToRGBA(hex));
@@ -479,9 +492,9 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		if (expression[0] == '~') //color all text after subfunction 
 		{
 			arg = expression.substr(1);
-			expression.erase(0);
 			if (arg.length() == 0) return;
 
+			expression.erase(0);
 			tempImage = latex.toImage(arg);
 		}
 		else //color only text in brackets
@@ -490,17 +503,23 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 			if (arg.length() == 0) return;
 
 			tempImage = latex.toImage(arg);
-
 			latex.setFontColor(tempColor);
 		}
 	}
 
-	if (!tempImage.isEmpty()) 
-		image.concat(tempImage);
+	if (!tempImage.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImage);
+		else
+			image = tempImage;
+	}
 };
 
 void Handlers::rastRaise(Latex& latex, std::string& expression, Image& image, SubFunctionType arg1)
 {
+	PROFILE_SCOPE("Handlers::rastRaise");
+
 	Image tempImage;
 	int lift_num;
 	std::string lift, arg;
@@ -514,13 +533,17 @@ void Handlers::rastRaise(Latex& latex, std::string& expression, Image& image, Su
 	if (lift.find_first_not_of("-0123456789") != std::string::npos) return;
 
 	lift_num = std::stoi(lift);
-
 	tempImage = latex.toImage(arg);
+
 	if (!tempImage.isEmpty())
 	{
 		tempImage.m_Baseline += lift_num;
 		if (lift_num < 0) tempImage.m_AdvanceHeight -= lift_num;
-		image.concat(tempImage);
+
+		if (!image.isEmpty())
+			image.concat(tempImage);
+		else
+			image = tempImage;
 	}
 };
 
@@ -534,10 +557,10 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 	std::string arg;
 
 	arg = Latex::getSubExpression(expression, 0, '{', '}', false);
-	if (arg.length() == 0)
-		return;
+	if (arg.length() == 0) return;
 
-	for (int i = 0; i < arg.length(); ++i){
+	for (size_t i = 0; i < arg.length(); ++i)
+	{
 		switch (textType)
 		{
 			case TEXT_CYR:
@@ -548,14 +571,20 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 				// Search for letter
 				// Assign letter from table to letter pointer
 				break;
+			default:
+				break;
 		}
+
 		tempImage.rasterizeCharacter(letter->charCode, latex.getSelectedFont(), latex.getFontColor());
 	}
 
-	image.concat(tempImage);
+	if (!image.isEmpty())
+		image.concat(tempImage);
+	else
+		image = tempImage;
 };
 
-void Handlers::rastSetFont(Latex& latex, std::string& expression, Image& image, SubFunctionType fontType)
+void Handlers::rastSetWeight(Latex& latex, std::string& expression, Image& image, SubFunctionType fontType)
 {
 	// get font type
 	// get subexpression
@@ -568,19 +597,21 @@ void Handlers::rastSetFont(Latex& latex, std::string& expression, Image& image, 
 		// set previous font type
 	// if rasterized image is not empty
 		// concat with passed image
+		
 };
 
 void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
 {
+	PROFILE_SCOPE("Handlers::rastScripts");
+
 	Image subImg, supImg;
 	Details subDetails, supDetails;
-	int newWidth, newHeight, newBaseline;
+	int newWidth, newHeight;
 	bool isSub, isSup;
 	Scripts scripts;
 	Font& font = latex.getSelectedFont();
 
-	if (expression.length() == 0)
-		return;
+	if (expression.length() == 0) return;
 
 	scripts = latex.texScripts(expression, ScriptType::BOTH);
 	
@@ -599,8 +630,7 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 		font.setSize(font.m_SFT.xScale + 5);
 	}
 
-	if (!isSub && !isSup)
-		return;
+	if (!isSub && !isSup) return;
 
 	if (isSub)
 		subDetails = subImg.getDetails();
@@ -618,5 +648,338 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 	tempImg.overlay(supImg, 0, 0);
 	tempImg.overlay(subImg, 0, newHeight - subDetails.height);
 
-	image.concat(tempImg);
+	if (!image.isEmpty())
+		image.concat(tempImg);
+	else
+		image = tempImg;
 };
+
+void Handlers::rastArray(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastArray");
+
+	// search for subexpression between brackets
+	// rasterize it
+	// rasterize left bracket the same height as rasterized expression
+	//? create bracket rasterizer with some height/width parameters
+	// do the same with right bracket
+	// lbracket + subexpr + rbracket
+	// concat result with image
+
+	Image exprImg, tempImg; 
+	std::string subexpr;
+
+	subexpr = Latex::getSubExpression(expression, 0, '{', '}', false);
+	exprImg = latex.toImage(subexpr);
+
+	switch(type)
+	{
+		case ARR_NORMAL:
+		case ARR_MATRIX:
+		{
+			Image lbImg, rbImg;
+			SFT_Char c;
+
+			double tempval = latex.getSelectedFont().m_SFT.yScale;
+			int ttt = exprImg.m_Height;
+
+			sft_char(&(latex.getSelectedFont().m_SFT), '{', &c);
+
+			while (c.height < ttt) 
+			{
+				latex.getSelectedFont().m_SFT.yScale = (ttt / (c.height / latex.getSelectedFont().m_SFT.yScale));
+				sft_char(&(latex.getSelectedFont().m_SFT), '{', &c);
+			}
+
+			lbImg.rasterizeCharacter(type == ARR_NORMAL ? '{' : '[', latex.getSelectedFont(), latex.getFontColor());
+			rbImg.rasterizeCharacter(type == ARR_NORMAL ? '}' : ']', latex.getSelectedFont(), latex.getFontColor());
+
+			latex.getSelectedFont().setSize(tempval);
+
+			tempImg = Image::concat(lbImg, exprImg);
+			tempImg.concat(rbImg);
+			break;
+		}
+		case ARR_TABULAR:
+		{
+			tempImg = exprImg;
+			break;
+		}
+		default:
+			break;
+	}
+
+	if (!tempImg.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImg);
+		else
+			image = tempImg;
+	}
+};
+
+void Handlers::rastRotate(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastRotate");
+
+	Image tempImage;
+	int degrees_num;
+	std::string subexpr, degrees;
+
+	degrees = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (degrees.length() == 0) return;
+
+	subexpr = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (subexpr.length() == 0) return;
+
+	if (degrees.find_first_not_of("-0123456789") != std::string::npos) return;
+
+	degrees_num = std::stoi(degrees);
+
+	tempImage = latex.toImage(subexpr);
+
+	if (!tempImage.isEmpty())
+	{
+		tempImage.rotate((double)(degrees_num % 360));
+		image.concat(tempImage);
+	}
+};
+
+void Handlers::rastFrac(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	Image tempImage, numerImg, denomImg;
+	std::string numer, denom;
+	
+	numer = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (numer.length() == 0) return;
+
+	denom = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (denom.length() == 0) return;
+
+	//lower size
+	numerImg = latex.toImage(numer);
+	denomImg = latex.toImage(denom);
+
+	if (numerImg.isEmpty() || denomImg.isEmpty()) return;
+
+	//add space between images
+	tempImage = Image::concat(numerImg, denomImg, ImagePosition::BOTTOM);
+
+	//get y coordinate to draw a horizontal line on that line
+	// if type == FRAC_NORMAL or type == FRAC_OVER
+	//draw a horizontal line
+	// if type == FRAC_ATOP
+	//leave as is
+	// if type == FRAC_CHOOSE
+	//leave as is and put parenthesis around expression
+	switch(type)
+	{
+		case FRAC_NORMAL:
+		case FRAC_OVER:
+			tempImage.drawLine(0, numerImg.m_Height - 1, tempImage.m_Width, numerImg.m_Height - 1, latex.getFontColor());
+			break;
+		case FRAC_ATOP:
+			break;
+		case FRAC_CHOOSE:
+			break;
+		default:
+			break;
+	}
+
+	if (!tempImage.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImage);
+		else
+			image = tempImage;
+	}
+}
+
+void Handlers::rastOverlay(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	// get subexpr1 and subexpr2
+	// rasterize
+	// overlay subexpr2Img onto subexpr1Img
+	// concat result to image
+	return;
+}
+
+void Handlers::rastSqrt(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	//! how.
+	return;
+}
+
+void Handlers::rastEval(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastEval");
+
+	std::string subexpr;
+	int subexpr_int;
+	std::function<char(void)> get, peek;
+	std::function<int(void)> expr, term, factor, number;
+
+	peek = [&subexpr]() -> char 
+	{ 
+		return subexpr[0]; 
+	};
+
+	get = [&subexpr]() -> char 
+	{ 
+		char result = subexpr[0]; 
+		subexpr.erase(0, 1); 
+		return result; 
+	};
+
+	number = [&get, &peek]() -> int 
+	{
+		int result = get() - '0';
+		while (peek() >= '0' && peek() <= '9') 
+			result = 10*result + get() - '0'; 
+		return result; 
+	};
+
+	factor = [&get, &peek, &number, &factor, &expr]() -> int 
+	{
+		if (peek() >= '0' && peek() <= '9')
+        	return number();
+		else if (peek() == '(')
+		{
+			get(); // '('
+			int result = expr();
+			get(); // ')'
+			return result;
+		}
+		else if (peek() == '-')
+		{
+			get();
+			return -factor();
+		}
+		return 0; // error
+	};
+
+	term = [&peek, &get, &factor]() -> int
+	{
+		int result = factor();
+		char op;
+		while (peek() == '*' || peek() == '/' || peek() == '^' || peek() == '%')
+		{
+			op = get();
+			if (op == '*')
+				result *= factor();
+			else if (op == '/')
+				result /= factor();
+			else if (op == '^')
+				result = (int)std::pow((double)result, factor());
+			else
+				result = result % factor();
+		}
+		return result;
+	};
+
+	expr = [&peek, &get, &term]() -> int
+	{
+		int result = term();
+		while (peek() == '+' || peek() == '-')
+			if (get() == '+')
+				result += term();
+			else
+				result -= term();
+		return result;
+	};
+
+	subexpr = Latex::getSubExpression(expression, 0, '(', ')', false);
+	if (subexpr.length() == 0)
+		return;
+	
+	subexpr_int = expr();
+	expression.insert(0, std::to_string(subexpr_int));
+}
+
+void Handlers::rastToday(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastToday");
+	
+	std::string subexpr;
+	char text[128];
+	tm tmstruct;
+	Image tempImg;
+	time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	localtime_s(&tmstruct, &time);
+
+	sprintf(text, "%s, %s %d, %d", dayNames[tmstruct.tm_wday], monthNames[tmstruct.tm_mon], tmstruct.tm_mday, tmstruct.tm_year + 1900);
+	subexpr = text;
+
+	tempImg = latex.toImage(subexpr);
+
+	if (!tempImg.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImg);
+		else
+			image = tempImg;
+	}
+}
+
+void Handlers::rastPicture(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastPicture");
+
+	int width, height;
+	size_t i;
+	std::string subexpr, temp;
+
+	subexpr = Latex::getSubExpression(expression, 0, '(', ')', false);
+	if (subexpr.find_first_not_of("-0123456789,") != std::string::npos) return;
+	width = std::stoi(subexpr.substr(0, subexpr.find(",")));
+	height = std::stoi(subexpr.substr(subexpr.find(",") + 1));
+
+	Image tempImg = Image(width, height, 4);
+	subexpr = Latex::getSubExpression(expression, 0, '{', '}', false);
+
+	while (subexpr.length() != 0)
+	{
+		for (i = 0; i < subexpr.length(); ++i)
+		{
+			if (subexpr[i] != '(') 
+			{
+				i++;
+				continue;
+			};
+
+			temp = Latex::getSubExpression(subexpr, 0, '(', ')', false);
+
+			if (temp.find_first_not_of("-0123456789,") != std::string::npos) return;
+			
+			width = std::stoi(temp.substr(0, temp.find(",")));
+			height = std::stoi(temp.substr(temp.find(",") + 1));
+
+			temp = Latex::getSubExpression(subexpr, 0, '{', '}', false);
+			tempImg.overlay(latex.toImage(temp), width, height);
+
+			break;
+		}
+		if (i > 0)
+			subexpr.erase(0, i + 1);
+	}
+
+	if (!tempImg.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImg);
+		else
+			image = tempImg;
+	}
+}
+
+void Handlers::rastAccent(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	return;
+}
+
+void Handlers::rastMathFunc(Latex& latex, std::string& expression, Image& image, SubFunctionType funcType)
+{
+	expression.insert(0, "}}");
+	expression.insert(0, mathFuncNames[funcType - 19]);
+	expression.insert(0, "{\\rm{");
+}
