@@ -5,16 +5,18 @@
 # define M_PI 3.14159265358979323846 
 
 #include "schrift.h"
-
 #include "Profiler.hpp"
 
 #include <functional>
 #include <vector>
 #include <string>
+#include <math.h>
 
 enum ImageType { UNKNOWN = -2, NO_TYPE = -1, PNG, JPG, BMP, TGA };
 
 enum ImagePosition { LEFT, RIGHT, TOP, BOTTOM };
+
+enum FontType { Normal, Italic, Bold, BoldItalic };
 
 enum AXIS { X, Y };
 
@@ -71,6 +73,8 @@ class Font {
 
 		const char* m_FontFile;
 
+		FontType type;
+
 		SFT m_SFT = {NULL, 12, 12, 0, 0, SFT_DOWNWARD_Y};
 
 };
@@ -117,7 +121,7 @@ class Image {
 		Details getDetails() const;
 
 		/*
-			@brief Check if image class is blank
+			@brief Check if image instance is blank
 		*/
 		bool isEmpty() const;
 

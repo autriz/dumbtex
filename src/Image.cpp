@@ -2,8 +2,6 @@
 #include "stb_image_write.h"
 #include "Image.hpp"
 
-#include <math.h>
-
 Font::Font(const char* fontFile, uint16_t size) 
 {
 	if(!setFont(fontFile)) {
@@ -869,12 +867,8 @@ Image Image::scaleDown(const Image& source, int times)
 			a /= denom;
 
 			uint8_t dstColor[4] = {(uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a};
-			if (denom == 0)
-				memset(dstPx, 0, source.m_Channels);
-			else
-				memcpy(dstPx, dstColor, source.m_Channels);
+			memcpy(dstPx, dstColor, source.m_Channels);
 			r = g = b = a = 0;
-			denom = times*times;
 		}
 	}
 
