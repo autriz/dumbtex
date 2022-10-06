@@ -27,8 +27,6 @@ class Latex {
         */
         enum class WarningBehavior { Strict, Ignore, Log };
 
-        enum class FontType { Normal, Italic, Bold, BoldItalic };
-
         //?Add warnings, logs, errors to code
         //?Or remove it
 
@@ -343,6 +341,7 @@ struct Handlers
             @example "\color{FF00FF}{hello}" rasterizes only text between brackets
             @example "\color{00FFFF}~hello" rasterizes everything after tilda
             @example "\gradient{FF0000}{00FF00}{hello}" rasterizes text between brackets and colors it with linear gradient
+            Warning: \gradient will override all colors that are present in the subexpression
         */
         static void rastColor(Latex&, std::string&, Image&, SubFunctionType);
 
@@ -478,39 +477,97 @@ static const char* mathFuncNames[] =
 
 static Letter cyrTable[] = 
 {
-	{"A", 1040}, {"B", 1041}, {"V", 1042}, {"D", 1043},
-	{"IE", 1044}, {"YO", 1025}, {"ZH", 1046}, {"Z", 1047},
-	{"I", 1048}, {"J", 1049}, {"K", 1050}, {"L", 1051},
-	{"M", 1052}, {"N", 1053}, {"O", 1054}, {"P", 1055},
-	{"R", 1056}, {"S", 1057}, {"T", 1058}, {"U", 1059},
-	{"F", 1060}, {"KH", 1061}, {"TS", 1062}, {"CH", 1063},
-	{"SH", 1064}, {"SHCH", 1065}, {"\\Cdprime", 1066}, {"\\Yeta", 1067},
-	{"\\Cprime", 1068}, {"E", 1069}, {"YU", 1070}, {"YA", 1071},
-	{"a", 1072}, {"b", 1073}, {"v", 1074}, {"g", 1075},
-	{"d", 1076}, {"ie", 1077}, {"yo", 1105}, {"zh", 1078},
-	{"z", 1079}, {"i", 1080}, {"j", 1081}, {"k", 1082},
-	{"l", 1083}, {"m", 1084}, {"n", 1085}, {"o", 1086},
-	{"p", 1087}, {"r", 1088}, {"s", 1089}, {"t", 1090},
-	{"u", 1091}, {"f", 1092}, {"kh", 1093}, {"ts", 1094},
-	{"ch", 1095}, {"sh", 1096}, {"shch", 1097}, {"\\cdprime", 1098},
-	{"\\yeta", 1099}, {"\\cprime", 1100}, {"e", 1101}, {"yu", 1102},
-	{"ya", 1103}
+	{"A",         1040}, {"B",         1041},
+    {"V",         1042}, {"D",         1043},
+	{"E",        1044}, {"YO",        1025},
+    {"ZH",        1046}, {"Z",         1047},
+	{"I",         1048}, {"J",         1049},
+    {"K",         1050}, {"L",         1051},
+	{"M",         1052}, {"N",         1053},
+    {"O",         1054}, {"P",         1055},
+	{"R",         1056}, {"S",         1057},
+    {"T",         1058}, {"U",         1059},
+	{"F",         1060}, {"KH",        1061},
+    {"TS",        1062}, {"CH",        1063},
+	{"SH",        1064}, {"SHCH",      1065},
+    {"\\Cdprime", 1066}, {"\\Yeta",    1067},
+	{"\\Cprime",  1068}, {"`E",         1069},
+    {"YU",        1070}, {"YA",        1071},
+	{"a",         1072}, {"b",         1073},
+    {"v",         1074}, {"g",         1075},
+	{"d",         1076}, {"e",        1077},
+    {"yo",        1105}, {"zh",        1078},
+	{"z",         1079}, {"i",         1080},
+    {"j",         1081}, {"k",         1082},
+	{"l",         1083}, {"m",         1084},
+    {"n",         1085}, {"o",         1086},
+	{"p",         1087}, {"r",         1088},
+    {"s",         1089}, {"t",         1090},
+	{"u",         1091}, {"f",         1092},
+    {"kh",        1093}, {"ts",        1094},
+	{"ch",        1095}, {"sh",        1096},
+    {"shch",      1097}, {"\\cdprime", 1098},
+	{"\\yeta",    1099}, {"\\cprime",  1100},
+    {"`e",         1101}, {"yu",        1102},
+	{"ya",        1103}, {NULL,        NULL}
 };
 
 static Letter greekTable[] =
 {
-	{"Alpha", 913}, {"Beta", 914}, {"Gamma", 915}, {"Delta", 916},
-	{"Epsilon", 917}, {"Zeta", 918}, {"Eta", 919}, {"Theta", 920},
-	{"Iota", 921}, {"Kappa", 922}, {"Lambda", 923}, {"Mu", 924},
-	{"Nu", 925}, {"Xi", 926}, {"Omicron", 927}, {"Pi", 928},
-	{"Rho", 929}, {"Sigma", 930}, {"Tau", 931}, {"Upsilon", 932},
-	{"Phi", 933}, {"Chi", 934}, {"Psi", 935}, {"Omega", 936},
-	{"alpha", 945}, {"beta", 946}, {"gamma", 947}, {"delta", 948},
-	{"epsilon", 949}, {"zeta", 950}, {"eta", 951}, {"theta", 952},
-	{"iota", 953}, {"kappa", 954}, {"lambda", 955}, {"mu", 956},
-	{"nu", 957}, {"xi", 958}, {"omicron", 959}, {"pi", 960},
-	{"rho", 961}, {"sigma", 963}, {"tau", 964}, {"upsilon", 965},
-	{"phi", 966}, {"chi", 967}, {"psi", 968}, {"omega", 969},
+	{"Alpha",   913}, {"Beta",    914},
+    {"Gamma",   915}, {"Delta",   916},
+	{"Epsilon", 917}, {"Zeta",    918},
+    {"Eta",     919}, {"Theta",   920},
+	{"Iota",    921}, {"Kappa",   922},
+    {"Lambda",  923}, {"Mu",      924},
+	{"Nu",      925}, {"Xi",      926},
+    {"Omicron", 927}, {"Pi",      928},
+	{"Rho",     929}, {"Sigma",   930},
+    {"Tau",     931}, {"Upsilon", 932},
+	{"Phi",     933}, {"Chi",     934},
+    {"Psi",     935}, {"Omega",   936},
+	{"alpha",   945}, {"beta",    946},
+    {"gamma",   947}, {"delta",   948},
+	{"epsilon", 949}, {"zeta",    950},
+    {"eta",     951}, {"theta",   952},
+	{"iota",    953}, {"kappa",   954},
+    {"lambda",  955}, {"mu",      956},
+	{"nu",      957}, {"xi",      958},
+    {"omicron", 959}, {"pi",      960},
+	{"rho",     961}, {"sigma",   963},
+    {"tau",     964}, {"upsilon", 965},
+	{"phi",     966}, {"chi",     967},
+    {"psi",     968}, {"omega",   969},
+    {NULL,      NULL}
+};
+
+static Letter miniGreekTable[] =
+{
+    {"A"/*Alpha*/,   913}, {"B"/*Beta*/,    914},
+    {"G"/*Gamma*/,   915}, {"D"/*Delta*/,   916},
+	{"E"/*Epsilon*/, 917}, {"Z"/*Zeta*/,    918},
+    {"H"/*Eta*/,     919}, {"Q"/*Theta*/,   920},
+	{"I"/*Iota*/,    921}, {"K"/*Kappa*/,   922},
+    {"L"/*Lambda*/,  923}, {"M"/*Mu*/,      924},
+	{"N"/*Nu*/,      925}, {"C"/*Xi*/,      926},
+    {"O"/*Omicron*/, 927}, {"P"/*Pi*/,      928},
+	{"R"/*Rho*/,     929}, {"S"/*Sigma*/,   930},
+    {"T"/*Tau*/,     931}, {"U"/*Upsilon*/, 932},
+	{"F"/*Phi*/,     933}, {"X"/*Chi*/,     934},
+    {"Y"/*Psi*/,     935}, {"W"/*Omega*/,   936},
+	{"a"/*alpha*/,   945}, {"b"/*beta*/,    946},
+    {"g"/*gamma*/,   947}, {"d"/*delta*/,   948},
+	{"e"/*epsilon*/, 949}, {"z"/*zeta*/,    950},
+    {"h"/*eta*/,     951}, {"q"/*theta*/,   952},
+	{"i"/*iota*/,    953}, {"k"/*kappa*/,   954},
+    {"l"/*lambda*/,  955}, {"m"/*mu*/,      956},
+	{"n"/*nu*/,      957}, {"c"/*xi*/,      958},
+    {"o"/*omicron*/, 959}, {"p"/*pi*/,      960},
+	{"r"/*rho*/,     961}, {"s"/*sigma*/,   963},
+    {"t"/*tau*/,     964}, {"u"/*upsilon*/, 965},
+	{"f"/*phi*/,     966}, {"x"/*chi*/,     967},
+    {"y"/*psi*/,     968}, {"w"/*omega*/,   969},
+    {NULL,           NULL}
 };
 
 static const SubFunction subfunctions[] = {

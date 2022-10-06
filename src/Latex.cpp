@@ -48,6 +48,10 @@ Image Latex::toImage(std::string& expression)
 	static bool isFirstIteration = false;
 	SubFunction subFunction;
 
+	#ifdef DEBUG
+		printf("[Latex::toImage] start expression: %s\n", expression.c_str());
+	#endif
+
 	if (isFirstIteration == false) 
 	{
 		prepExpression(expression); //prepare expression to find unsupported subfunctions and remove unnecessary braces, if found
@@ -55,20 +59,14 @@ Image Latex::toImage(std::string& expression)
 	}
 
 	#ifdef DEBUG
-		printf("[Latex::toImage] start expression: %s\n", expression.c_str());
+		printf("[Latex::toImage] prepared start expression: %s\n", expression.c_str());
 	#endif
 
 	while (expression.length() > 0)
 	{
 		for (i = 0; i < expression.length(); ++i)
 		{
-			//if expression[i] == '{' and expression[i-1] != '\\' then
-			//find '}', check if '}' not escaped
-			//if '}' not found, add it to the end of expression
-			//cut expression between '{' and '}'
-			//remove '{' and '}'
-			//parse it to toImage() again
-			//concat with finalImage
+			Image tempImage;
 
 			#ifdef DEBUG
 				if (i != 0) printf("[Latex::toImage] expression: %s\n", expression.c_str());
@@ -77,23 +75,17 @@ Image Latex::toImage(std::string& expression)
 			if (expression[i] == '_' || expression[i] == '^')
 			{
 				Handlers::rastScripts(*this, expression, finalImage, NONE);
-				break;
+
 			}
 			else if (expression[i] == '{')
 			{
 				std::string subexpression = Latex::getSubExpression(expression, 0, '{', '}', false);
 
 				if (expression.length() <= 0)
-				{
 					expression = subexpression;
-					break;
-				}
 				else
-				{
-					Image tempImage = toImage(subexpression);
-					finalImage.concat(tempImage);
-					break;
-				}
+					finalImage.concat(toImage(subexpression));
+				break;
 			}
 			else if (expression[i] == '\\')
 			{
@@ -103,10 +95,11 @@ Image Latex::toImage(std::string& expression)
 					//?Because escaped delims depend on size of all expression
 
 					//!Take inspiration from MimeTeX's texsubexpr() function, quite a gold mine
+					expression.erase(i, strlen(subFunction.expression));
 
-					expression.erase(i, strlen(subFunction.expression)); 
 					if (subFunction.handler) 
 						subFunction.handler(*this, expression, finalImage, subFunction.type);
+						
 				}
 				else 
 				{
@@ -118,14 +111,18 @@ Image Latex::toImage(std::string& expression)
 
 					j = 0;
 				}
-				break;
 			}
 			else
 			{
-				finalImage.rasterizeCharacter(expression[i], *p_SelectedFont, p_Color);
+				tempImage.rasterizeCharacter(expression[i], *p_SelectedFont, p_Color);
 				expression.erase(i, 1);
-				break;
+				if (expression[i] == '_' || expression[i] == '^')
+					Handlers::rastScripts(*this, expression, tempImage, NONE);
 			}
+
+			if (!tempImage.isEmpty()) 
+				finalImage.concat(tempImage);
+			break;
 		}
 
 		i = 0;
@@ -193,23 +190,17 @@ Scripts Latex::texScripts(std::string& expression, ScriptType which)
 
 	while (expression.length() > 0)
 	{
-		if (expression[0] == '_' && (which == 1 || which == 3))
+		if (expression[0] == '_' && (which == 1 || which == 3) && !gotSub)
 		{
-			if (!gotSub)
-			{
-				expression.erase(0, 1);
-				gotSub = true;
-				subScript = Latex::getSubExpression(expression, 0, '{', '}', false);
-			}
+			expression.erase(0, 1);
+			gotSub = true;
+			subScript = Latex::getSubExpression(expression, 0, '{', '}', false);
 		}
-		else if (expression[0] == '^' && (which == 2 || which == 3))
+		else if (expression[0] == '^' && (which == 2 || which == 3) && !gotSup)
 		{
-			if (!gotSup)
-			{
-				expression.erase(0, 1);
-				gotSup = true;
-				supScript = Latex::getSubExpression(expression, 0, '{', '}', false);
-			}
+			expression.erase(0, 1);
+			gotSup = true;
+			supScript = Latex::getSubExpression(expression, 0, '{', '}', false);
 		}
 		else
 			return {subScript, supScript};
@@ -325,18 +316,22 @@ void Latex::setFont(FontType type, const char* pathToFont, uint16_t size)
 	{
 		case FontType::Normal:
 			m_NormalFont.setFont(pathToFont);
+			m_NormalFont.type = FontType::Normal;
 			m_NormalFont.setSize(size);
 			break;
 		case FontType::Italic:
 			m_ItalicFont.setFont(pathToFont);
+			m_ItalicFont.type = FontType::Italic;
 			m_ItalicFont.setSize(size);
 			break;
 		case FontType::Bold:
 			m_BoldFont.setFont(pathToFont);
+			m_BoldFont.type = FontType::Bold;
 			m_BoldFont.setSize(size);
 			break;
 		case FontType::BoldItalic:
 			m_BoldItalicFont.setFont(pathToFont);
+			m_BoldItalicFont.type = FontType::BoldItalic;
 			m_BoldItalicFont.setSize(size);
 			break;
 	}
@@ -550,33 +545,53 @@ void Handlers::rastRaise(Latex& latex, std::string& expression, Image& image, Su
 void Handlers::rastText(Latex& latex, std::string& expression, Image& image, SubFunctionType textType)
 {
 	//? Maybe add another array of subfunction-like letters (i.e. {"\\alpha", NULL, letterCode})
-	
-	return;
+
+	auto findLetter = [](Letter* table, std::string& expr) -> Letter*
+	{
+		size_t i, match;
+		Letter* letter;
+
+		for (i = 0; table[i].character != NULL; ++i)
+		{
+			match = expr.find(table[i].character, 0);
+
+			if (match != std::string::npos && match == 0)
+				letter = &table[i];
+		};
+
+		return letter;
+	};
+
 	Image tempImage;
 	Letter* letter;
-	std::string arg;
+	std::string subexpression;
 
-	arg = Latex::getSubExpression(expression, 0, '{', '}', false);
-	if (arg.length() == 0) return;
+	subexpression = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (subexpression.length() == 0) return;
 
-	for (size_t i = 0; i < arg.length(); ++i)
+	while (subexpression.length() > 0)
 	{
+		#ifdef DEBUG
+			printf("[Handlers::rastText] subexpression = %s\n", subexpression.c_str());
+		#endif
 		switch (textType)
 		{
 			case TEXT_CYR:
-				// Search for letter
-				// Assign letter from table to letter pointer
+				letter = findLetter(cyrTable, subexpression);
 				break;
 			case TEXT_GREEK:
-				// Search for letter
-				// Assign letter from table to letter pointer
+				letter = findLetter(miniGreekTable, subexpression);
 				break;
 			default:
 				break;
 		}
 
+		subexpression.erase(0, strlen(letter->character));
 		tempImage.rasterizeCharacter(letter->charCode, latex.getSelectedFont(), latex.getFontColor());
 	}
+
+	if (expression[0] == '_' || expression[0] == '^')
+		Handlers::rastScripts(latex, expression, tempImage, NONE);
 
 	if (!image.isEmpty())
 		image.concat(tempImage);
@@ -586,18 +601,35 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 
 void Handlers::rastSetWeight(Latex& latex, std::string& expression, Image& image, SubFunctionType fontType)
 {
-	// get font type
-	// get subexpression
-	// set font type
-	// if open brace after font type is not present ('~' is present)
-		// rasterize the rest of expression
-	// else
-		// get subexpression between braces
-		// rasterize subexpression
-		// set previous font type
-	// if rasterized image is not empty
-		// concat with passed image
-		
+	PROFILE_SCOPE("Handlers::rastSetWeight");
+
+	Image tempImage;
+	FontType type;
+	std::string subexpression;
+
+	type = latex.getSelectedFont().type;
+
+	subexpression = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (subexpression.length() == 0) return;
+
+	latex.setSelectedFont(
+		fontType == FONT_REGULAR ? FontType::Normal : 
+		fontType == FONT_ITALIC ? FontType::Italic : 
+		fontType == FONT_BOLD ? FontType::Bold : 
+		fontType == FONT_BOLDITALIC ? FontType::BoldItalic : FontType::Normal
+	);
+
+	tempImage = latex.toImage(subexpression);
+
+	latex.setSelectedFont(type);
+
+	if (!tempImage.isEmpty())
+	{
+		if (!image.isEmpty())
+			image.concat(tempImage);
+		else
+			image = tempImage;
+	}
 };
 
 void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
@@ -605,9 +637,10 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 	PROFILE_SCOPE("Handlers::rastScripts");
 
 	Image subImg, supImg;
-	Details subDetails, supDetails;
+	Details subDetails = {0, 0, 0, 0, 0}, supDetails = {0, 0, 0, 0, 0};
 	int newWidth, newHeight;
 	bool isSub, isSup;
+	float sizeOff = 0.6f;
 	Scripts scripts;
 	Font& font = latex.getSelectedFont();
 
@@ -615,20 +648,19 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 
 	scripts = latex.texScripts(expression, ScriptType::BOTH);
 	
+
+	font.setSize(font.m_SFT.xScale * sizeOff);
 	if (scripts.subScript.length() != 0)
 	{
 		isSub = true;
-		font.setSize(font.m_SFT.xScale - 5);
 		subImg = latex.toImage(scripts.subScript); // implement proper size changer
-		font.setSize(font.m_SFT.xScale + 5);
 	}
 	if (scripts.supScript.length() != 0)
 	{
 		isSup = true;
-		font.setSize(font.m_SFT.xScale - 5);
 		supImg = latex.toImage(scripts.supScript);
-		font.setSize(font.m_SFT.xScale + 5);
 	}
+	font.setSize(font.m_SFT.xScale / sizeOff);
 
 	if (!isSub && !isSup) return;
 
@@ -638,8 +670,17 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 	if (isSup)
 		supDetails = supImg.getDetails();
 
+	#ifdef DEBUG
+		printf("[Handlers::rastScripts] Subscript details: height = %d, width = %d\n", subDetails.height, subDetails.width);
+		printf("[Handlers::rastScripts] Superscript details: height = %d, width = %d\n", supDetails.height, supDetails.width);
+	#endif
+
 	newWidth = subDetails.width > supDetails.width ? subDetails.width : supDetails.width;
 	newHeight = (image.m_Height - image.m_AdvanceHeight) + subDetails.height + supDetails.height;
+
+	#ifdef DEBUG
+		printf("[Handlers::rastScripts] Combined height = %d, width = %d\n", newHeight, newWidth);
+	#endif
 
 	Image tempImg(newWidth, newHeight, 4);
 	tempImg.m_Baseline = newHeight - subDetails.height;
@@ -979,7 +1020,5 @@ void Handlers::rastAccent(Latex& latex, std::string& expression, Image& image, S
 
 void Handlers::rastMathFunc(Latex& latex, std::string& expression, Image& image, SubFunctionType funcType)
 {
-	expression.insert(0, "}}");
 	expression.insert(0, mathFuncNames[funcType - 19]);
-	expression.insert(0, "{\\rm{");
 }
