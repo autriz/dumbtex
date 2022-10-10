@@ -42,12 +42,12 @@ void Font::setSize(uint16_t size)
 	m_SFT.yScale = size;
 }
 
-Image::Image(): m_Width(0), m_Height(0), m_Channels(0), m_Size(0), m_Baseline(m_Height), m_AdvanceHeight(0), m_Data(NULL) { };
+Image::Image(): m_Width(0), m_Height(0), m_Channels(0), m_Baseline(m_Height), m_AdvanceHeight(0), m_Size(0), m_Data(NULL) { };
 
 Image::Image(int w, int h, int channels) : m_Width(w), m_Height(h), m_Channels(channels), m_Baseline(h)
 {
-	this->m_Size = this->m_Width * this->m_Height * this->m_Channels;
 	this->m_AdvanceHeight = 0;
+	this->m_Size = this->m_Width * this->m_Height * this->m_Channels;
 	this->m_Data = new uint8_t[this->m_Size];
 
 	memset(this->m_Data, 0, this->m_Size);
@@ -145,6 +145,8 @@ void Image::colorMask(float r, float g, float b)
 
 void Image::gradient(const Color& startColor, const Color& stopColor)
 {
+	PROFILE_SCOPE("Image::gradient");
+
 	uint8_t r, g, b;
 	uint8_t* px;
 	float n;
@@ -203,9 +205,6 @@ void Image::rotate(double degrees)
 {
 	PROFILE_SCOPE("Image::rotate");
 	//!Non-orthogonal rotation results in "holes" in image
-	// implement image resizing for rotation
-	// for example, rotate 4 edge pixels (0,0) (1,0) (0,1) (1,1) to degrees 
-	// and get the highest x and y and use them as width and height
 
 	if ((degrees < 0.001f && degrees > -0.001f) || degrees > 359.999f) // literally wont move
 		return;
@@ -274,9 +273,8 @@ void Image::rotate(double degrees)
 
 void Image::overlay(const Image &source, int x, int y)
 {
-	//? I think that algo could be optimized
-	//? Instead of iteration through each color, I could just smash row with memcpy()
 	PROFILE_SCOPE("Image::overlay");
+
 	#ifdef DEBUG
 		printf("[Image::overlay] x = %d, y = %d\n", x, y);
 	#endif
@@ -490,7 +488,7 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 	}
 
 	#ifdef DEBUG
-		printf("[Image::rasterizeCharacter] x: %d, y: %d, width: %d, height: %d, advance: %d\n", c.x, c.y, c.width, c.height, c.advance);
+		printf("[Image::rasterizeCharacter] x = %d, y = %d, width = %d, height = %d, advance = %d\n", c.x, c.y, c.width, c.height, c.advance);
 	#endif
 
 	Image character(c.width + (c.advance < c.width ? 0 : (c.advance - c.width)), (c.width == 0 && c.advance != 0) ? 1 : c.height, 4);
@@ -520,6 +518,8 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, c
 
 void Image::drawLine(int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
+	PROFILE_SCOPE("Image::drawLine");
+
 	int dx, dy, p, x, y;
 	uint8_t *srcPx;
 	uint8_t color[4] = {r, g, b, a};
@@ -616,6 +616,8 @@ void Image::handleRaster(const Font& font, Image& chr, SFT_Char& c, uint8_t r, u
 
 void Image::crop(uint16_t cx, uint16_t cy, uint16_t cw, uint16_t ch)
 {
+	PROFILE_SCOPE("Image::crop");
+
 	m_Size = cw * ch * m_Channels;
 
 	uint8_t *croppedImage = new uint8_t[m_Size];
@@ -698,6 +700,8 @@ void Image::concat(const Image& image, ImagePosition position)
 {
 	PROFILE_SCOPE("Image::concat");
 
+	if (image.isEmpty()) return;
+
 	if (this->isEmpty() && !image.isEmpty())
 		*this = image;
 	else if (!image.isEmpty())
@@ -709,6 +713,9 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 	PROFILE_SCOPE("static Image::concat");
 
 	int new_w, new_h, new_adv_h, new_baseline, new_channels;
+
+	if (left.isEmpty()) return right;
+	if (right.isEmpty()) return left;
 
 	new_channels = left.m_Channels > right.m_Channels ? left.m_Channels : right.m_Channels;
 
@@ -808,6 +815,11 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 	return newImage;
 };
 
+void Image::scaleUp(int times)
+{
+	*this = Image::scaleUp(*this, times);
+}
+
 Image Image::scaleUp(const Image& source, int times)
 {
 	PROFILE_SCOPE("Image::scaleUp");
@@ -831,6 +843,11 @@ Image Image::scaleUp(const Image& source, int times)
 	}
 
 	return scaledImage;
+}
+
+void Image::scaleDown(int times)
+{
+	*this = Image::scaleDown(*this, times);
 }
 
 Image Image::scaleDown(const Image& source, int times)

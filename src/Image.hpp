@@ -10,7 +10,7 @@
 #include <functional>
 #include <vector>
 #include <string>
-#include <math.h>
+#include <cmath>
 
 enum ImageType { UNKNOWN = -2, NO_TYPE = -1, PNG, JPG, BMP, TGA };
 
@@ -19,10 +19,6 @@ enum ImagePosition { LEFT, RIGHT, TOP, BOTTOM };
 enum FontType { Normal, Italic, Bold, BoldItalic };
 
 enum AXIS { X, Y };
-
-struct Math {
-	//	
-};
 
 struct Color {
 	uint8_t r;
@@ -243,6 +239,10 @@ class Image {
 		*/
 		void concat(const Image& source, ImagePosition position = ImagePosition::RIGHT);
 
+		void scaleUp(int times);
+
+		void scaleDown(int times);
+
 		/* 
 			@brief Get file type 
 			@param filename path to file
@@ -282,21 +282,15 @@ class Image {
 	private:
 
 		/*
-			@brief Array of pixels, i.e. [r,g,b,r,g,b,...] or [r,g,b,a,r,g,b,a,...]
-		*/
-		uint8_t* m_Data = NULL;
-		/*
-			@brief Size of an image
-		*/
-		size_t m_Size = 0;
-		/*
 			@brief Image width
 		*/
 		int m_Width;
+
 		/*
 			@brief Image height
 		*/
 		int m_Height;
+
 		/*
 			@brief Image channels, i.e. channels = 4 represents each pixel as RGBA, 3 as RGB
 		*/
@@ -311,5 +305,15 @@ class Image {
 			@brief Advance height under baseline
 		*/
 		int m_AdvanceHeight;
+
+		/*
+			@brief Size of an image
+		*/
+		size_t m_Size = 0;
+
+		/*
+			@brief Array of pixels, i.e. [r,g,b,r,g,b,...] or [r,g,b,a,r,g,b,a,...]
+		*/
+		uint8_t* m_Data = NULL;
 
 };
