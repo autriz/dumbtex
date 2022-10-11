@@ -237,7 +237,7 @@ class Image {
 			@brief Concatenates source image to the 
 				   right of the destination image
 		*/
-		void concat(const Image& source, ImagePosition position = ImagePosition::RIGHT);
+		void concat(const Image& source, ImagePosition position = ImagePosition::RIGHT, int space = 0);
 
 		void scaleUp(int times);
 
@@ -256,7 +256,7 @@ class Image {
 
 			@returns Image of two concatenated images
 		*/
-		static Image concat(const Image& destination, const Image& source, ImagePosition position = ImagePosition::RIGHT);
+		static Image concat(const Image& destination, const Image& source, ImagePosition position = ImagePosition::RIGHT, int space = 0);
 
 		static Image scaleUp(const Image& source, int times);
 

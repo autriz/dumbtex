@@ -696,7 +696,7 @@ void Image::resizeNN(uint16_t nw, uint16_t nh)
 	newImage = nullptr;
 };
 
-void Image::concat(const Image& image, ImagePosition position)
+void Image::concat(const Image& image, ImagePosition position, int space)
 {
 	PROFILE_SCOPE("Image::concat");
 
@@ -705,10 +705,10 @@ void Image::concat(const Image& image, ImagePosition position)
 	if (this->isEmpty() && !image.isEmpty())
 		*this = image;
 	else if (!image.isEmpty())
-		*this = Image::concat(*this, image, position);
+		*this = Image::concat(*this, image, position, space);
 };
 
-Image Image::concat(const Image& left, const Image& right, ImagePosition position)
+Image Image::concat(const Image& left, const Image& right, ImagePosition position, int space)
 {
 	PROFILE_SCOPE("static Image::concat");
 
@@ -726,7 +726,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 		case ImagePosition::RIGHT:
 		case ImagePosition::LEFT:
 		default:
-			new_w = left.m_Width + right.m_Width;
+			new_w = left.m_Width + right.m_Width + space;
 			new_h = (left.m_Height - left.m_AdvanceHeight) > (right.m_Height - right.m_AdvanceHeight) ? left.m_Height : right.m_Height;
 			new_adv_h = left.m_AdvanceHeight > right.m_AdvanceHeight ? left.m_AdvanceHeight : right.m_AdvanceHeight;
 			// new_h += ((left.m_AdvanceHeight < right.m_AdvanceHeight) && (left.isEmpty() == false)) ? right.m_AdvanceHeight - left.m_AdvanceHeight : 0;
@@ -739,7 +739,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 		case ImagePosition::TOP:
 		case ImagePosition::BOTTOM:
 			new_w = left.m_Width > right.m_Width ? left.m_Width : right.m_Width;
-			new_h = left.m_Height + right.m_Height;
+			new_h = left.m_Height + right.m_Height + space;
 			new_adv_h = 0;
 			new_baseline = new_h - new_adv_h;
 			break;
@@ -774,7 +774,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 			#ifdef DEBUG
 				printf("[Image::concat] right side concatenation\n");
 			#endif
-			newImage.overlay(right, left.m_Width, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0); 
+			newImage.overlay(right, left.m_Width + space, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0); 
 			break;
 		case ImagePosition::LEFT:
 			#ifdef DEBUG
@@ -784,7 +784,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 			#ifdef DEBUG
 				printf("[Image::concat] left side concatenation\n");
 			#endif
-			newImage.overlay(left, right.m_Width, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
+			newImage.overlay(left, right.m_Width + space, newImage.m_Baseline > 0 ? newImage.m_Baseline - right.m_Baseline : 0);
 			break;
 		case ImagePosition::TOP:
 			#ifdef DEBUG
@@ -794,7 +794,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 			#ifdef DEBUG
 				printf("[Image::concat] left side concatenation\n");
 			#endif
-			newImage.overlay(left, 0, right.m_Height);
+			newImage.overlay(left, 0, right.m_Height + space);
 			break;
 		case ImagePosition::BOTTOM:
 			#ifdef DEBUG
@@ -804,7 +804,7 @@ Image Image::concat(const Image& left, const Image& right, ImagePosition positio
 			#ifdef DEBUG
 				printf("[Image::concat] right side concatenation\n");
 			#endif
-			newImage.overlay(right, 0, left.m_Height);
+			newImage.overlay(right, 0, left.m_Height + space);
 			break;
 	}
 
