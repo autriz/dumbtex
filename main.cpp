@@ -1,6 +1,6 @@
 #include "src/Latex.hpp"
 
-//Allows compilation from c++11, haven't checked runtime part
+//Compiles from c++11
 int main(int argc, char* argv[]) {
 	
 	#if defined(DEBUG) || defined(PROFILER)
@@ -22,17 +22,9 @@ int main(int argc, char* argv[]) {
 			latex.toImage(equation).write(filepath);
 	
 	}
-	catch(const Latex::ConversionException& err)
+	catch(const std::runtime_error& err)
 	{
-		std::cerr << "Conversion Exception Error: " << err.what() << "\n";
-	}
-	catch(const Latex::FileException& err)
-	{
-		std::cerr << "File Exception Error: " << err.what() << "\n";
-	}
-	catch(const Latex::ParseException& err)
-	{
-		std::cerr << "Parse Exception Error: " << err.what() << "\n";
+		std::cerr << "Runtime Error: " << err.what() << "\n";
 	}
 
 	#if defined(DEBUG) || defined(PROFILER)
