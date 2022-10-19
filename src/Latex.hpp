@@ -25,13 +25,15 @@ class Latex {
 		*/
 		Latex();
 
-		Latex(const Latex& other) = delete;
+		Latex(const Latex&) = delete;
 
-		Latex(Latex& other) = delete;
+		Latex(Latex&) = delete;
 
-		Latex(Latex&& other) = delete;
+		Latex(Latex&&) = delete;
 
 		~Latex();
+
+		static Latex& Get();
 
 		/*
 			@brief Renders image and returns it.
@@ -41,16 +43,19 @@ class Latex {
 		Image toImage(std::string& expression);
 
 		/*
+			@brief Preprocesses math expression. 
+			@brief Removes comments, converts user-defined functions to their equivalents, converts \\left( to \\( and \\right) to \\)
+			@param expression Math expression
+		*/
+		void prepExpression(std::string& expression);
+
+		/*
 			@brief Set font file
 			@param type Font type
 			@param pathToFont
 			@param size Font size
 		*/
 		void setFont(FontType type, const char* pathToFont, uint16_t size = 50);
-
-		Font& getSelectedFont();
-
-		void setSelectedFont(FontType type);
 
 		/*
 			@brief Sets font files (normal, italic, bold and bold italic)
@@ -60,6 +65,18 @@ class Latex {
 			@param boldItalic Path to bold italic font file
 		*/
 		void setFonts(const char* normal, const char* italic, const char* bold, const char* boldItalic);
+
+		/*
+			@brief Get current font
+			@returns Reference to current font
+		*/
+		Font& getSelectedFont();
+
+		/*
+			@brief Set current font
+			@param type Font type
+		*/
+		void setSelectedFont(FontType type);
 
 		/*
 			@brief Set font color
@@ -85,31 +102,22 @@ class Latex {
 			@returns String, containing everything between left and right delimeters, or next char if none found
 		*/
 		static std::string getSubExpression(std::string& expression, unsigned from, const char left, const char right, bool returnDelims);
-		
+
 		/*
 			@brief Searches and gets index of subfunction from the list
 			@param expression Expression string
 			@param at An index of starting point (always starts from backslash)
 			@returns A positive integer, representing index, or negative (-1), if subfunction was not found
 		*/
-		static struct SubFunction getSubFunction(const std::string& expression, size_t at);
-
-		void operator=(const Latex& other) = delete;
-
-		/*
-			@brief WIP. Preprocesses math expression. 
-			@brief Removes comments, converts \\left( to \\( and \\right) to \\)
-			@brief *Change later from copy of expression to expression itself*
-			@param expression Math expression
-			@returns void
-		*/
-		void prepExpression(std::string& expression);
+		static const struct SubFunction getSubFunction(const std::string& expression, size_t at);
 
 		/*
 			@brief Searches for subscript and/or superscript in expression
 			@returns Scripts struct, containing subscript and supscript strings
 		*/
-		Scripts texScripts(std::string& expression, ScriptType which);
+		static const struct Scripts texScripts(std::string& expression, ScriptType which);
+
+		void operator=(const Latex& other) = delete;
 
 	public:
 
@@ -129,7 +137,6 @@ class Latex {
 
 /* 
 	@brief Converts hexadecimal (i.e 0xFFFFFF) to RGBA
-	@brief **Added to handle hexadecimal color changer**
 	@param hex Hexadecimal number
 	@param alpha Alpha channel
 	@returns Color struct containing RGBA values
@@ -138,7 +145,6 @@ Color hexToRGBA(const int& hex, uint8_t alpha = 255);
 
 /* 
 	@brief Converts hexadecimal (i.e "FFFFFF") to RGBA
-	@brief **Added to handle hexadecimal color changer**
 	@param hex Hexadecimal string
 	@param alpha Alpha channel
 	@returns Color struct containing RGBA values
@@ -236,12 +242,17 @@ enum SubFunctionType
 	MATH_SEC
 };
 
-/* Name is subject to change */
 struct SubFunction
 {
 	const char* expression;
 	std::function<void(Latex&, std::string&, Image&, SubFunctionType)> handler;
 	SubFunctionType type;
+};
+
+struct userFunction
+{
+	const char* expression;
+	const char* equivalent;
 };
 
 struct Letter
@@ -419,33 +430,21 @@ struct Handlers
 		*/
 	   static void rastArrow(Latex&, std::string&, Image&, SubFunctionType);
 
-};
+		/*
+			@brief \line handler
+			@details
+			@example \line(x0,y0)(x1,y1)
+		*/
+	   static void rastLine(Latex&, std::string&, Image&, SubFunctionType);
 
-static const char* dayNames[] = 
-{ 
-	"Sunday", "Monday", "Tuesday", "Wednesday", 
-	"Thursday", "Friday", "Saturday"
-};
+		/*
+			@brief \reflectbox handler
+			@details
+			@example \reflectbox[x]{M} - reflects by X axis, "M" becomes "W"
+			@example \reflectbox[y]{R} - reflects by Y axis, "R" becomes "Я"
+		*/
+	   static void rastReflect(Latex&, std::string&, Image&, SubFunctionType);
 
-static const char* monthNames[] = 
-{ 
-	"January", "February", "March", 
-	"April", "May", "June", "July", 
-	"August", "September", "October", "November", 
-	"December"
-};
-
-static const char* mathFuncNames[] =
-{
-	"error",
-	"arccos", "arcsin", "arctan",
-	"arg", "sin", "sinh", "cos",
-	"cosh", "tan", "tanh", "cot",
-	"coth", "csc", "deg", "det",
-	"dim", "exp", "gcd", "hom", "inf", 
-	"ker", "lg", "lim", "liminf", 
-	"limsup", "ln", "log", "max", 
-	"min"
 };
 
 static const Letter cyrTable[] = 
@@ -515,7 +514,8 @@ static const Letter greekTable[] =
 	{NULL,           0}
 };
 
-static const SubFunction subfunctions[] = {
+static const SubFunction subfunctions[] = 
+{
 	/* ??? */
 	{"\\frac",      Handlers::rastFrac,    FRAC_NORMAL},
 	{"\\over",      Handlers::rastFrac,    FRAC_OVER},
@@ -528,15 +528,16 @@ static const SubFunction subfunctions[] = {
 	{"\\strikeout", Handlers::rastOverlay, OVERLAY_HOR_LINE}, // (crossed with horizontal line)
 	{"\\compose",   Handlers::rastOverlay, OVERLAY_COMPOSE},
 	{"\\sqrt",      Handlers::rastSqrt,    NONE}, //rastsqrt
-	{"\\sum",       nullptr,               NONE},
-	{"\\prod",      nullptr,               NONE},
+	{"\\sum",       nullptr,               NONE}, // Σ
+	{"\\prod",      nullptr,               NONE}, // Π (big pi)
+	{"\\int",		nullptr,			   NONE}, // ∫ (8747)
 	/* Arrays */
 	{"\\begin",      Handlers::rastBegin,   NONE}, //rastbegin
 	{"\\array",      Handlers::rastArray,   ARR_NORMAL},
 	{"\\matrix",     Handlers::rastArray,   ARR_MATRIX},
 	{"\\tabular",    Handlers::rastArray,   ARR_TABULAR},
 	{"\\picture",    Handlers::rastPicture, NONE},
-	{"\\line",       nullptr,               NONE}, //rastline
+	{"\\line",       Handlers::rastLine,    NONE}, //rastline
 	{"\\rule",       nullptr,               NONE}, //rastrule
 	{"\\circle",     nullptr,               NONE}, //rastcircle
 	{"\\bezier",     Handlers::rastBezier, 	BEZIER_CUBIC},
@@ -545,7 +546,7 @@ static const SubFunction subfunctions[] = {
 	{"\\rotatebox",  Handlers::rastRotate,  NONE},
 	{"\\magnify",    Handlers::rastMagnify, NONE},
 	{"\\magbox",     Handlers::rastMagnify, NONE},
-	{"\\reflectbox", nullptr,               NONE}, //rastreflect
+	{"\\reflectbox", Handlers::rastReflect, NONE},
 	{"\\fbox",       Handlers::rastFBox,    NONE},
 	{"\\boxed",      Handlers::rastFBox,    NONE},
 	{"\\eval",       Handlers::rastEval,    NONE},
@@ -575,8 +576,8 @@ static const SubFunction subfunctions[] = {
 	{"\\greek", Handlers::rastText, TEXT_GREEK},
 	/* Weight */
 	{"\\it",     Handlers::rastSetWeight, FONT_ITALIC},
-	{"\\bold",   Handlers::rastSetWeight, FONT_BOLD},
 	{"\\boldit", Handlers::rastSetWeight, FONT_BOLDITALIC},
+	{"\\bold",   Handlers::rastSetWeight, FONT_BOLD},
 	/* Colors */
 	{"\\color",     Handlers::rastColor, COLOR_CUSTOM},
 	{"\\red",       Handlers::rastColor, COLOR_RED},
@@ -585,21 +586,18 @@ static const SubFunction subfunctions[] = {
 	{"\\black",     Handlers::rastColor, COLOR_BLACK},
 	{"\\white",     Handlers::rastColor, COLOR_WHITE},
 	{"\\gradient",  Handlers::rastColor, COLOR_GRADIENT},
-	{"\\reverse",   nullptr,             NONE}, // huh
-	{"\\reversefg", nullptr,             NONE},
-	{"\\reversebg", nullptr,             NONE},
 	/* Font sizes (rastSetSize) */
-	{"\\tiny",         nullptr, NONE},
-	{"\\scriptsize",   nullptr, NONE},
-	{"\\footnotesize", nullptr, NONE},
-	{"\\small",        nullptr, NONE},
-	{"\\normalsize",   nullptr, NONE},
-	{"\\large",        nullptr, NONE},
-	{"\\Large",        nullptr, NONE},
-	{"\\LARGE",        nullptr, NONE},
-	{"\\huge",         nullptr, NONE},
-	{"\\Huge",         nullptr, NONE},
-	{"\\HUGE",         nullptr, NONE},
+	{"\\tiny",         nullptr, NONE}, // 0
+	{"\\scriptsize",   nullptr, NONE}, // 1
+	{"\\footnotesize", nullptr, NONE}, // 2
+	{"\\small",        nullptr, NONE}, // 3
+	{"\\normalsize",   nullptr, NONE}, // 4
+	{"\\large",        nullptr, NONE}, // 5
+	{"\\Large",        nullptr, NONE}, // 6
+	{"\\LARGE",        nullptr, NONE}, // 7
+	{"\\huge",         nullptr, NONE}, // 8
+	{"\\Huge",         nullptr, NONE}, // 9
+	{"\\HUGE",         nullptr, NONE}, // 10
 	/* Accents (rastaccent) */
 	{"\\overbrace",           Handlers::rastAccent, NONE},
 	{"\\underbrace",          Handlers::rastAccent, NONE},
@@ -715,4 +713,10 @@ static const SubFunction subfunctions[] = {
 	{"\\psi",     Handlers::rastGRChar, (SubFunctionType)968},
 	{"\\omega",   Handlers::rastGRChar, (SubFunctionType)969},
 	{NULL, nullptr, NONE}
+};
+
+static const userFunction userDefFunctions[] = 
+{
+	{"\\cyan", "\\color{00ffff}"},
+	{NULL,     NULL}
 };

@@ -1,8 +1,22 @@
 #include "Latex.hpp"
 
+/*
+	DumbTeX
+	Rasterization of LaTeX-like expressions to image
+	
+	Image's 0,0 at top left corner, meaning that Y coordinate is downwards
+
+*/
+
 Latex::Latex(): p_SelectedFont(&m_NormalFont) { };
 
 Latex::~Latex() { };
+
+Latex& Latex::Get()
+{
+	static Latex instance;
+	return instance;
+}
 
 Image Latex::toImage(std::string& expression)
 {
@@ -90,7 +104,7 @@ Image Latex::toImage(std::string& expression)
 			}
 			else
 			{
-				tempImage.rasterizeCharacter(expression[i], *p_SelectedFont, p_Color);
+				tempImage.rasterizeCharacter(getSelectedFont(), expression[i], p_Color);
 				expression.erase(i, 1);
 				if (expression[i] == '_' || expression[i] == '^')
 					Handlers::rastScripts(*this, expression, tempImage, NONE);
@@ -113,8 +127,24 @@ void Latex::prepExpression(std::string& expression)
 
 	if (expression.length() == 0) return;
 
+	auto getFunc = [](const std::string& expression, size_t at) -> userFunction
+	{
+		size_t i, match;
+
+		for (i = 0; userDefFunctions[i].expression != NULL; i++)
+		{
+			match = expression.find(userDefFunctions[i].expression, at);
+
+			if (match != std::string::npos && match == at)
+				return userDefFunctions[i];
+		};
+
+		return userDefFunctions[i];
+	};
+
 	const char* comment = "%%";
 	std::stack<char> brackets;
+	userFunction userFunc;
 	size_t startIndex, endIndex;
 
 	//Find and erase comments
@@ -133,7 +163,7 @@ void Latex::prepExpression(std::string& expression)
 	}
 
 	//Fix unbalanced brackets
-	for (size_t i = 0; i < expression.length(); i++)
+	for (size_t i = 0; i < expression.length(); ++i)
 	{
 		if (expression[i] == '{') // found open bracket
 			brackets.push(expression[i]); // push it to stack
@@ -151,99 +181,24 @@ void Latex::prepExpression(std::string& expression)
 		for (size_t i = 0; i < brackets.size(); i++)
 			expression.append("}"); //add close bracket for every unfixed open bracket
 
-	//Erase spaces
-
-	//Convert \\left( to \\( and \\right) to \\)
-	// while ( )
-};
-
-Scripts Latex::texScripts(std::string& expression, ScriptType which)
-{
-	PROFILE_SCOPE("Latex::texScripts");
-
-	bool gotSub = false, gotSup = false;
-	std::string subScript, supScript;
-
-	while (expression.length() > 0)
+	//replace user-defined functions with its equivalent
+	for (size_t i = 0; i < expression.length(); ++i)
 	{
-		if (expression[0] == '_' && (which == 1 || which == 3) && !gotSub)
+		if (expression[i] == '\\')
 		{
-			expression.erase(0, 1);
-			gotSub = true;
-			subScript = Latex::getSubExpression(expression, 0, '{', '}', false);
-		}
-		else if (expression[0] == '^' && (which == 2 || which == 3) && !gotSup)
-		{
-			expression.erase(0, 1);
-			gotSup = true;
-			supScript = Latex::getSubExpression(expression, 0, '{', '}', false);
-		}
-		else
-			return {subScript, supScript};
-	}
-
-	return {subScript, supScript};
-};
-
-std::string Latex::getSubExpression(std::string& expression, unsigned from, const char left, const char right, bool returnDelims)
-{
-	PROFILE_SCOPE("Latex::getSubExpression");
-
-	unsigned first, last;
-	std::string result;
-	std::stack<char> brackets;
-
-	if (expression[from] != left) // if expression not starts from left delimeter
-	{
-		result = expression[from];
-		expression.erase(from, 1);
-		return result; //just return first char
-	}
-
-	first = expression.find(left, from); //find index of left delimeter
-	if (first > from) return NULL;
-
-	for (size_t i = 0; i < expression.length(); i++) //find index of right delimeter
-	{
-		if (expression[i] == left)
-			brackets.push(expression[i]);
-
-		if (expression[i] == right)
-		{
-			if (brackets.size() > 1)
-				brackets.pop();
-			else
+			if ((userFunc = getFunc(expression, i)).expression != NULL)
 			{
-				last = i;
-				break;
+				expression.erase(i, strlen(userFunc.expression));
+				expression.insert(i, userFunc.equivalent);
+				i = 0;
 			}
 		}
 	}
 
-	while (expression[last - 1] == '\\') //if delimeter is escaped
-		last = expression.find(right, last+1); //find right delimeter again
+	//Erase spaces (optional)
 
-	result = returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
-	expression.erase(0, returnDelims ? result.length() : result.length() + 2);
-
-	return result;
-};
-
-SubFunction Latex::getSubFunction(const std::string& expression, size_t at)
-{
-	PROFILE_SCOPE("Latex::getSubFunction");
-
-	size_t i, match;
-
-	for (i = 0; subfunctions[i].expression != NULL; i++) //iterate through subfunction list
-	{
-		match = expression.find(subfunctions[i].expression, at); //get match
-
-		if (match != std::string::npos && match == at) //if matches
-			return subfunctions[i];
-	};
-
-	return subfunctions[i]; //if not, should return NULL defined subfunction (dummy)
+	//Convert \\left( to \\( and \\right) to \\)
+	// while ( )
 };
 
 void Latex::setFont(FontType type, const char* pathToFont, uint16_t size) 
@@ -252,22 +207,22 @@ void Latex::setFont(FontType type, const char* pathToFont, uint16_t size)
 	{
 		case FontType::Normal:
 			m_NormalFont.setFont(pathToFont);
-			m_NormalFont.type = FontType::Normal;
+			m_NormalFont.m_Type = FontType::Normal;
 			m_NormalFont.setSize(size);
 			break;
 		case FontType::Italic:
 			m_ItalicFont.setFont(pathToFont);
-			m_ItalicFont.type = FontType::Italic;
+			m_ItalicFont.m_Type = FontType::Italic;
 			m_ItalicFont.setSize(size);
 			break;
 		case FontType::Bold:
 			m_BoldFont.setFont(pathToFont);
-			m_BoldFont.type = FontType::Bold;
+			m_BoldFont.m_Type = FontType::Bold;
 			m_BoldFont.setSize(size);
 			break;
 		case FontType::BoldItalic:
 			m_BoldItalicFont.setFont(pathToFont);
-			m_BoldItalicFont.type = FontType::BoldItalic;
+			m_BoldItalicFont.m_Type = FontType::BoldItalic;
 			m_BoldItalicFont.setSize(size);
 			break;
 	}
@@ -322,6 +277,95 @@ const Color& Latex::getFontColor()
 	return this->p_Color;
 }
 
+std::string Latex::getSubExpression(std::string& expression, unsigned from, const char left, const char right, bool returnDelims)
+{
+	PROFILE_SCOPE("Latex::getSubExpression");
+
+	unsigned first, last;
+	std::string result;
+	std::stack<char> brackets;
+
+	if (expression[from] != left) // if expression not starts from left delimeter
+	{
+		result = expression[from];
+		expression.erase(from, 1);
+		return result; //just return first char
+	}
+
+	first = expression.find(left, from); //find index of left delimeter
+	if (first > from) return NULL;
+
+	for (size_t i = 0; i < expression.length(); i++) //find index of right delimeter
+	{
+		if (expression[i] == left)
+			brackets.push(expression[i]);
+
+		if (expression[i] == right)
+		{
+			if (brackets.size() > 1)
+				brackets.pop();
+			else
+			{
+				last = i;
+				break;
+			}
+		}
+	}
+
+	while (expression[last - 1] == '\\') //if delimeter is escaped
+		last = expression.find(right, last+1); //find right delimeter again
+
+	result = returnDelims ? expression.substr(first, last - first + 1) : expression.substr(first + 1, last - first - 1);
+	expression.erase(0, returnDelims ? result.length() : result.length() + 2);
+
+	return result;
+};
+
+const struct SubFunction Latex::getSubFunction(const std::string& expression, size_t at)
+{
+	PROFILE_SCOPE("Latex::getSubFunction");
+
+	size_t i, match;
+
+	for (i = 0; subfunctions[i].expression != NULL; i++) //iterate through subfunction list
+	{
+		match = expression.find(subfunctions[i].expression, at); //get match
+
+		if (match != std::string::npos && match == at) //if matches
+			return subfunctions[i];
+	};
+
+	return subfunctions[i]; //if not, should return NULL defined subfunction (dummy)
+};
+
+const struct Scripts Latex::texScripts(std::string& expression, ScriptType which)
+{
+	PROFILE_SCOPE("Latex::texScripts");
+
+	bool gotSub = false, gotSup = false;
+	std::string subScript, supScript;
+
+	while (expression.length() > 0)
+	{
+		if (expression[0] == '_' && (which == 1 || which == 3) && !gotSub)
+		{
+			expression.erase(0, 1);
+			gotSub = true;
+			subScript = Latex::getSubExpression(expression, 0, '{', '}', false);
+		}
+		else if (expression[0] == '^' && (which == 2 || which == 3) && !gotSup)
+		{
+			expression.erase(0, 1);
+			gotSup = true;
+			supScript = Latex::getSubExpression(expression, 0, '{', '}', false);
+		}
+		else
+			return {subScript, supScript};
+	}
+
+	return {subScript, supScript};
+};
+
 Color hexToRGBA(const std::string& hex, uint8_t alpha)
 {
 	return hexToRGBA(std::stoi(hex, 0, 16), alpha);
@@ -347,6 +391,7 @@ void Handlers::rastNewline(Latex& latex, std::string& expression, Image& image, 
 
 	if (image.isEmpty() || expression.length() == 0) return;
 
+	//optional parameter
 	if (expression[0] == '[')
 		arg = Latex::getSubExpression(expression, 0, '[', ']', false);
 
@@ -361,9 +406,6 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 	PROFILE_SCOPE("Handlers::rastColor");
 
 	Image tempImage;
-
-	//?if called, should set color temporarily or permanently, if 1st char is "~"
-	//!create temporary color handler
 
 	if (colorType == COLOR_GRADIENT) //color with gradient
 	{
@@ -394,30 +436,17 @@ void Handlers::rastColor(Latex& latex, std::string& expression, Image& image, Su
 		Color tempColor = latex.getFontColor();
 		std::string hex, arg;
 		
-		switch(colorType)
+		if (colorType == COLOR_CUSTOM)
 		{
-			case COLOR_CUSTOM:
-				hex = Latex::getSubExpression(expression, 0, '{', '}', false);
-				if (hex.length() == 0) return;
-				break;
-			case COLOR_RED:
-				hex = "ff0000";
-				break;
-			case COLOR_GREEN:
-				hex = "00ff00";
-				break;
-			case COLOR_BLUE:
-				hex = "0000ff";
-				break;
-			case COLOR_BLACK:
-				hex = "000000";
-				break;
-			case COLOR_WHITE:
-				hex = "ffffff";
-				break;
-			default:
-				break;
+			hex = Latex::getSubExpression(expression, 0, '{', '}', false);
+			if (hex.length() == 0) return;
 		}
+		else
+			hex = 
+				colorType == COLOR_RED ? "ff0000" : 
+				colorType == COLOR_GREEN ? "00ff00" : 
+				colorType == COLOR_BLUE ? "0000ff" : 
+				colorType == COLOR_WHITE ? "ffffff" : "000000";
 		
 		latex.setFontColor(hexToRGBA(hex));
 
@@ -517,7 +546,7 @@ void Handlers::rastText(Latex& latex, std::string& expression, Image& image, Sub
 		if (letter->character != NULL)
 		{
 			subexpression.erase(0, strlen(letter->character));
-			tempImage.rasterizeCharacter(letter->charCode, latex.getSelectedFont(), latex.getFontColor());
+			tempImage.rasterizeCharacter(latex.getSelectedFont(), letter->charCode, latex.getFontColor());
 		}
 		else
 			subexpression.erase(0, 1);
@@ -531,10 +560,8 @@ void Handlers::rastSetWeight(Latex& latex, std::string& expression, Image& image
 	PROFILE_SCOPE("Handlers::rastSetWeight");
 
 	Image tempImage;
-	FontType type;
+	FontType type = latex.getSelectedFont().m_Type;
 	std::string subexpression;
-
-	type = latex.getSelectedFont().type;
 
 	subexpression = Latex::getSubExpression(expression, 0, '{', '}', false);
 	if (subexpression.length() == 0) return;
@@ -567,20 +594,22 @@ void Handlers::rastScripts(Latex& latex, std::string& expression, Image& image, 
 
 	if (expression.length() == 0) return;
 
-	scripts = latex.texScripts(expression, ScriptType::BOTH);
-	
+	scripts = Latex::texScripts(expression, ScriptType::BOTH);
 
 	font.setSize(font.m_SFT.xScale * sizeOff);
+
 	if (scripts.subScript.length() != 0)
 	{
 		isSub = true;
 		subImg = latex.toImage(scripts.subScript); // implement proper size changer
 	}
+
 	if (scripts.supScript.length() != 0)
 	{
 		isSup = true;
 		supImg = latex.toImage(scripts.supScript);
 	}
+
 	font.setSize(font.m_SFT.xScale / sizeOff);
 
 	if (!isSub && !isSup) return;
@@ -635,6 +664,7 @@ void Handlers::rastBegin(Latex& latex, std::string& expression, Image& image, Su
 	};
 
 	std::string subexpression, environment;
+	const char* end = "\\end";
 
 	const char* environments[] =
 	{
@@ -684,7 +714,9 @@ void Handlers::rastBegin(Latex& latex, std::string& expression, Image& image, Su
 			return;
 	}
 
-	// search for \end{...}
+	// find first \end{...} token
+	// if token is found, and environment isn't matching, check for another 
+	// \begin between them, or check for another \end after first one
 
 	/* 
 		get all thingys between \begin{...} and \end{...} (everything before 
@@ -701,7 +733,7 @@ void Handlers::rastArray(Latex& latex, std::string& expression, Image& image, Su
 	// search for subexpression between brackets
 	// rasterize it
 	// rasterize left bracket the same height as rasterized expression
-	//? create bracket rasterizer with some height/width parameters
+	// create bracket rasterizer with some height/width parameters
 	// do the same with right bracket
 	// lbracket + subexpr + rbracket
 	// concat result with image
@@ -719,22 +751,29 @@ void Handlers::rastArray(Latex& latex, std::string& expression, Image& image, Su
 		{
 			Image lbImg, rbImg;
 			SFT_Char c;
+			Font font = latex.getSelectedFont();
+			Color color = latex.getFontColor();
 
-			double tempval = latex.getSelectedFont().m_SFT.yScale;
+			double tempval = font.m_SFT.yScale;
 			int ttt = exprImg.m_Height;
 
-			sft_char(&(latex.getSelectedFont().m_SFT), '{', &c);
+			sft_char(&(font.m_SFT), '{', &c);
 
 			while (c.height < ttt) 
 			{
-				latex.getSelectedFont().m_SFT.yScale = (ttt / (c.height / latex.getSelectedFont().m_SFT.yScale));
-				sft_char(&(latex.getSelectedFont().m_SFT), '{', &c);
+				// uint_fast32_t outline;
+				// outline_offset(font.m_SFT.font, '{', &outline);
+				// y1 = geti16(sft->font, outline + 4);
+				// y2 = geti16(sft->font, outline + 8);
+				//font.m_SFT.yScale = exprImg.m_Height / (y2 + 1 - y1);
+				font.m_SFT.yScale = (ttt / (c.height / (font.m_SFT.yScale / font.m_SFT.font->unitsPerEm)));
+				sft_char(&(font.m_SFT), '{', &c);
 			}
 
-			lbImg.rasterizeCharacter(type == ARR_NORMAL ? '{' : '[', latex.getSelectedFont(), latex.getFontColor());
-			rbImg.rasterizeCharacter(type == ARR_NORMAL ? '}' : ']', latex.getSelectedFont(), latex.getFontColor());
+			lbImg.rasterizeCharacter(font, type == ARR_NORMAL ? '{' : '[', color);
+			rbImg.rasterizeCharacter(font, type == ARR_NORMAL ? '}' : ']', color);
 
-			latex.getSelectedFont().setSize(tempval);
+			font.setSize(tempval);
 
 			tempImg = Image::concat(lbImg, exprImg);
 			tempImg.concat(rbImg);
@@ -798,8 +837,7 @@ void Handlers::rastFrac(Latex& latex, std::string& expression, Image& image, Sub
 
 	if (numerImg.isEmpty() || denomImg.isEmpty()) return;
 
-	//add space between images
-	tempImage = Image::concat(numerImg, denomImg, ImagePosition::BOTTOM);
+	tempImage = Image::concat(numerImg, denomImg, ImagePosition::BOTTOM, 1);
 
 	switch(type)
 	{
@@ -825,7 +863,29 @@ void Handlers::rastOverlay(Latex& latex, std::string& expression, Image& image, 
 
 	auto overlayLine = [&latex, &expression, &image, &overlayType]() -> void
 	{
+		Image subImage1, subImage2;
+		std::string subexpr;
 
+		subexpr = Latex::getSubExpression(expression, 0, '{', '}', false);
+		if (subexpr.length() == 0) return;
+
+		subImage1 = latex.toImage(subexpr);
+
+		switch (overlayType)
+		{
+			case OVERLAY_DIAG_LINE:
+				subImage1.drawLine(0, subImage1.m_Height - 1, subImage1.m_Width - 1, 0, latex.getFontColor());
+				break;
+			case OVERLAY_HOR_LINE:
+				subImage1.drawLine(0, subImage1.m_Height / 2, subImage1.m_Width, subImage1.m_Height / 2, latex.getFontColor());
+				break;
+			case OVERLAY_SLASH:
+				break;
+			default:
+				break;
+		}
+
+		image.concat(subImage1);
 	};
 
 	auto overlayCompose = [&latex, &expression, &image]() mutable -> void
@@ -862,11 +922,7 @@ void Handlers::rastOverlay(Latex& latex, std::string& expression, Image& image, 
 	switch (overlayType)
 	{
 		case OVERLAY_SLASH:
-			overlayLine();
-			break;
 		case OVERLAY_DIAG_LINE:
-			overlayLine();
-			break;
 		case OVERLAY_HOR_LINE:
 			overlayLine();
 			break;
@@ -979,6 +1035,21 @@ void Handlers::rastToday(Latex& latex, std::string& expression, Image& image, Su
 	char text[128];
 	tm tmstruct;
 	Image tempImg;
+
+	static const char* dayNames[] = 
+	{ 
+		"Sunday", "Monday", "Tuesday", "Wednesday", 
+		"Thursday", "Friday", "Saturday"
+	};
+
+	static const char* monthNames[] = 
+	{ 
+		"January", "February", "March", 
+		"April", "May", "June", "July", 
+		"August", "September", "October", "November", 
+		"December"
+	};
+
 	time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	localtime_s(&tmstruct, &time);
 
@@ -1046,6 +1117,19 @@ void Handlers::rastMathFunc(Latex& latex, std::string& expression, Image& image,
 {
 	PROFILE_SCOPE("Handlers::rastMathFunc");
 
+	static const char* mathFuncNames[] =
+	{
+		"error",
+		"arccos", "arcsin", "arctan",
+		"arg", "sin", "sinh", "cos",
+		"cosh", "tan", "tanh", "cot",
+		"coth", "csc", "deg", "det",
+		"dim", "exp", "gcd", "hom", "inf", 
+		"ker", "lg", "lim", "liminf", 
+		"limsup", "ln", "log", "max", 
+		"min"
+	};
+
 	expression.insert(0, mathFuncNames[funcType - 399]);
 }
 
@@ -1057,7 +1141,7 @@ void Handlers::rastGRChar(Latex& latex, std::string& expression, Image& image, S
 
 	if (charCode != 0)
 	{
-		tempImage.rasterizeCharacter(charCode, latex.getSelectedFont(), latex.getFontColor());
+		tempImage.rasterizeCharacter(latex.getSelectedFont(), charCode, latex.getFontColor());
 
 		if (expression[0] == '_' || expression[0] == '^')
 			Handlers::rastScripts(latex, expression, tempImage, NONE);
@@ -1080,8 +1164,7 @@ void Handlers::rastBezier(Latex& latex, std::string& expression, Image& image, S
 	// can't understand why quadractic has 3 points, and cubic 4 points, like wth
 	Image tempImage;
 	uint8_t* dstPx;
-	Color fontColor = latex.getFontColor();
-	uint8_t color[4] = {fontColor.r, fontColor.g, fontColor.b, fontColor.a};
+	Color color = latex.getFontColor();
 
 	switch (bezierType)
 	{
@@ -1234,4 +1317,61 @@ void Handlers::rastArrow(Latex& latex, std::string& expression, Image& image, Su
 	PROFILE_SCOPE("Handlers::rastArrow");
 
 	return;
+}
+
+void Handlers::rastLine(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastLine");
+
+	Image tempImage;
+	int x1, x0, y1, y0;
+	Color color = latex.getFontColor();
+
+	std::string pos1 = Latex::getSubExpression(expression, 0, '(', ')', false);
+	if (pos1.length() == 0 || pos1.find_first_not_of(",0123456789") != std::string::npos) return;
+
+	std::string pos2 = Latex::getSubExpression(expression, 0, '(', ')', false);
+	if (pos2.length() == 0 || pos2.find_first_not_of(",0123456789") != std::string::npos) return;
+
+	x0 = std::stoi(pos1.substr(0,pos1.find(",")));
+	y0 = std::stoi(pos1.substr(pos1.find(",") + 1));
+
+	x1 = std::stoi(pos2.substr(0,pos2.find(",")));
+	y1 = std::stoi(pos2.substr(pos2.find(",") + 1));
+
+	tempImage = Image(std::max<int>(x0, x1) + 1, std::max<int>(y0, y1) + 1, 4);
+
+	tempImage.drawLine(x0, y0, x1, y1, color);
+
+	image.concat(tempImage);
+}
+
+void Handlers::rastReflect(Latex& latex, std::string& expression, Image& image, SubFunctionType type)
+{
+	PROFILE_SCOPE("Handlers::rastReflect");
+
+	Image tempImage;
+	std::string axis, subexpr;
+
+	axis = Latex::getSubExpression(expression, 0, '[', ']', false);
+	if (axis.length() == 0 && axis.length() > 1) return;
+
+	subexpr = Latex::getSubExpression(expression, 0, '{', '}', false);
+	if (subexpr.length() == 0) return;
+
+	tempImage = latex.toImage(subexpr);
+
+	switch (axis[0])
+	{
+		case 'x':
+			tempImage.flip(AXIS::X);
+			break;
+		case 'y':
+			tempImage.flip(AXIS::Y);
+			break;
+		default:
+			break;
+	}
+
+	image.concat(tempImage);
 }
