@@ -12,14 +12,13 @@ int main(int argc, char* argv[]) {
 
 	std::string equation = argv[1];
 	const char* filepath = argv[2];
-	Latex latex;
 
 	try
 	{
-		latex.setFonts("./fonts/OpenSans-Regular.ttf", "./fonts/OpenSans-Italic.ttf", "./fonts/OpenSans-Bold.ttf", "./fonts/OpenSans-BoldItalic.ttf");
+		Latex::Get().setFonts("./fonts/OpenSans-Regular.ttf", "./fonts/OpenSans-Italic.ttf", "./fonts/OpenSans-Bold.ttf", "./fonts/OpenSans-BoldItalic.ttf");
 
 		if (argc >= 3)
-			latex.toImage(equation).write(filepath);
+			Latex::Get().toImage(equation).write(filepath);
 	
 	}
 	catch(const std::runtime_error& err)
