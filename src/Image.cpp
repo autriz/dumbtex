@@ -334,7 +334,7 @@ void Image::overlay(const Image &source, int x, int y)
 	}
 }
 
-void Image::overlayText(const std::string& txt, const Font& font, int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+void Image::overlayText(const Font& font, const std::string& txt, int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	PROFILE_SCOPE("Image::overlayText");
 
@@ -413,12 +413,12 @@ void Image::overlayText(const std::string& txt, const Font& font, int x, int y, 
 	}
 }
 
-void Image::overlayText(const std::string& txt, const Font &font, int x, int y, const Color& color = {255, 255, 255, 255})
+void Image::overlayText(const Font &font, const std::string& txt, int x, int y, const Color& color = {255, 255, 255, 255})
 {
-	overlayText(txt, font, x, y, color.r, color.g, color.b, color.a);
+	overlayText(font, txt, x, y, color.r, color.g, color.b, color.a);
 }
 
-void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+void Image::rasterizeText(const Font& font, const std::string& txt, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	PROFILE_SCOPE("Image::rasterizeText");
 
@@ -463,12 +463,12 @@ void Image::rasterizeText(const std::string& txt, const Font& font, uint8_t r, u
 	}
 }
 
-void Image::rasterizeText(const std::string& txt, const Font& font, const Color& color = {255, 255, 255, 255})
+void Image::rasterizeText(const Font& font, const std::string& txt, const Color& color = {255, 255, 255, 255})
 {
-	rasterizeText(txt, font, color.r, color.g, color.b, color.a);
+	rasterizeText(font, txt, color.r, color.g, color.b, color.a);
 }
 
-void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+void Image::rasterizeCharacter(const Font& font, unsigned long charCode, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	PROFILE_SCOPE("Image::rasterizeCharacter");
 
@@ -511,43 +511,66 @@ void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, u
 	free(c.image); //free anyway
 }
 
-void Image::rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color)
+void Image::rasterizeCharacter(const Font& font, unsigned long charCode, const Color& color)
 {
-	rasterizeCharacter(charCode, font, color.r, color.g, color.b, color.a);
+	rasterizeCharacter(font, charCode, color.r, color.g, color.b, color.a);
 }
 
 void Image::drawLine(int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	PROFILE_SCOPE("Image::drawLine");
 
-	int dx, dy, p, x, y;
-	uint8_t *srcPx;
-	uint8_t color[4] = {r, g, b, a};
- 
-	dx=x1-x0;
-	dy=y1-y0;
-	
-	x=x0;
-	y=y0;
-	
-	p=2*dy-dx;
-	
-	while(x<x1)
+	auto sign = [](int value) -> int
 	{
-		srcPx = &m_Data[(x + y * m_Width) * m_Channels];
+		return value < 0 ? -1 : value > 0 ? 1 : 0;
+	};
 
-		for (int chnl = 0; chnl < m_Channels; chnl++) // putpixel(x,y,7);
-			srcPx[chnl] = color[chnl];
+	int interchange;
+	uint8_t *dstPx;
+	uint8_t color[4] = {r, g, b, a};
 
-		if(p>=0)
+	//Bresenham's Line Algorithm
+ 
+	float y = y0;
+	float x = x0;
+	float deltaX = std::abs(x1 - x0);
+	float deltaY = std::abs(y1 - y0);
+	float S1 = sign(x1 - x0);
+	float S2 = sign(y1 - y0);
+
+	if (deltaY > deltaX)
+	{
+		std::swap(deltaX, deltaY);
+		interchange = 1;
+	}
+	else
+		interchange = 0;
+
+	float E = 2 * deltaY - deltaX;
+	float A = 2 * deltaY;
+	float B = 2 * deltaY - 2 * deltaX;
+
+	for (int i = 0; i < deltaX; ++i)
+	{
+		if (x >= m_Width || y >= m_Height) continue;
+
+		dstPx = &m_Data[((int)x + (int)y * m_Width) * m_Channels];
+
+		for (int chnl = 0; chnl < m_Channels; ++chnl)
+			dstPx[chnl] = color[chnl];
+
+		if (E < 0)
 		{
-			y=y+1;
-			p=p+2*dy-2*dx;
+			if (interchange == 1) y += S2;
+			else x += S1;
+			E = E + A;
 		}
 		else
-			p=p+2*dy;
-
-		x=x+1;
+		{
+			y += S2;
+			x += S1;
+			E = E + B;
+		}
 	}
 }
 

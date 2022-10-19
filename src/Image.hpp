@@ -25,6 +25,8 @@ struct Color {
 	uint8_t g;
 	uint8_t b;
 	uint8_t a; //-1 if none
+	uint8_t operator[](int index) { return index == 0 ? r : (index == 1 ? g : (index == 2 ? b : (index == 3 ? a : 0))); };
+	const uint8_t operator[](int index) const { return index == 0 ? r : (index == 1 ? g : (index == 2 ? b : (index == 3 ? a : 0))); }
 };
 
 struct Details {
@@ -69,7 +71,7 @@ class Font {
 
 		const char* m_FontFile;
 
-		FontType type;
+		FontType m_Type;
 
 		SFT m_SFT = {NULL, 12, 12, 0, 0, SFT_DOWNWARD_Y};
 
@@ -147,56 +149,76 @@ class Image {
 
 		/*
 			@brief Overlays text onto image
-			@param txt Text to be ovelaid
 			@param font Font that will be used
+			@param txt Text to be ovelaid
 			@param x,y Coordinates from which image will be overlaid
 			@param r,g,b,a RGBA parameters (0-255)
 		*/
-		void overlayText(const std::string& txt, const Font& font, int x, int y, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
+		void overlayText(const Font& font, const std::string& txt, int x, int y, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
 
 		/*
 			@brief Overlays text onto image
-			@param txt Text to be ovelaid
 			@param font Font that will be used
+			@param txt Text to be ovelaid
 			@param x,y Coordinates from which image will be overlaid
 			@param color Color struct with RGBA parameters (0-255)
 		*/
-		void overlayText(const std::string& txt, const Font& font, int x, int y, const Color& color);
+		void overlayText(const Font& font, const std::string& txt, int x, int y, const Color& color);
 
 		/*
 			@brief Rasterizes text
-			@param txt Text to be rasterized
 			@param font Font that will be used
+			@param txt Text to be rasterized
 			@param r,g,b,a RGBA parameters (0-255)
 		*/
-		void rasterizeText(const std::string& txt, const Font& font, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
+		void rasterizeText(const Font& font, const std::string& txt, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
 
 		/*
 			@brief Rasterizes text
-			@param txt Text to be rasterized
 			@param font Font that will be used
+			@param txt Text to be rasterized
 			@param color Color struct with RGBA parameters (0-255)
 		*/
-		void rasterizeText(const std::string& txt, const Font& font, const Color& color);
+		void rasterizeText(const Font& font, const std::string& txt, const Color& color);
 
 		/*
 			@brief Rasterizes character
-			@param charCode Unicode character code
 			@param font Font that will be used
+			@param charCode Unicode character code
 			@param r,g,b,a RGBA parameters (0-255)
 		*/
-		void rasterizeCharacter(const unsigned long charCode, const Font& font, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
+		void rasterizeCharacter(const Font& font, unsigned long charCode, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
 
 		/*
 			@brief Rasterizes character
-			@param charCode Unicode character code
 			@param font Font that will be used
+			@param charCode Unicode character code
 			@param color Color struct with RGBA parameters (0-255)
 		*/
-		void rasterizeCharacter(const unsigned long charCode, const Font& font, const Color& color = {255, 255, 255, 255});
+		void rasterizeCharacter(const Font& font, unsigned long charCode, const Color& color = {255, 255, 255, 255});
 
+		/*
+			@brief Returns image of a rasterized char with requested height
+			@param font Font to be used for getting character
+			@param charCode Unicode code of an character
+			@param height Requested height of a character
+		*/
+		Image requestChar(const Font& font, unsigned long charCode, int height);
+
+		/*
+			@brief Draws line on an image
+			@param x0,y0 First position
+			@param x1,y1 Second position
+			@param r,g,b,a RGBA parameters (0-255)
+		*/
 		void drawLine(int x0, int y0, int x1, int y1, uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
 
+		/*
+			@brief Draws line on an image
+			@param x0,y0 First position
+			@param x1,y1 Second position
+			@param color Color struct with RGBA parameters (0-255)
+		*/
 		void drawLine(int x0, int y0, int x1, int y1, const Color& color = {255, 255, 255, 255});
 
 		/*
@@ -239,8 +261,16 @@ class Image {
 		*/
 		void concat(const Image& source, ImagePosition position = ImagePosition::RIGHT, int space = 0);
 
+		/*
+			@brief Scales up image
+			@param times Value by which image is scaled up by
+		*/
 		void scaleUp(int times);
 
+		/*
+			@brief Scales down image
+			@param times Value by which image is scaled down by
+		*/
 		void scaleDown(int times);
 
 		/* 
@@ -258,8 +288,18 @@ class Image {
 		*/
 		static Image concat(const Image& destination, const Image& source, ImagePosition position = ImagePosition::RIGHT, int space = 0);
 
+		/*
+			@brief Scales up image
+			@param source Image to be scaled up
+			@param times Value by which image is scaled up by
+		*/
 		static Image scaleUp(const Image& source, int times);
 
+		/*
+			@brief Scales down image
+			@param source Image to be scaled down
+			@param times Value by which image is scaled down by
+		*/
 		static Image scaleDown(const Image& source, int times);
 
 		void operator=(const Image& origin);
