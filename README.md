@@ -3,6 +3,8 @@
 
 WIP. Tested only normal font included in `fonts` file. Another fonts may invoke undefined behavior.
 
+May be full of bad code.
+
 ## Building
 Use `make debug` for O0 optimization and `-D DEBUG -D PROFILER` flags
 
